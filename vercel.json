@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api-sumopod/:match*",
+      "destination": "https://ai.sumopod.com/:match*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

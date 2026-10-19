@@ -1,0 +1,526 @@
+import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Navbar } from '../../components/Navbar'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+import { supabase } from '../../lib/supabase'
+import { Button } from '../../components/ui/button'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import {
+  User,
+  Briefcase,
+  Award,
+  CheckCircle2,
+  Calendar,
+  Building2,
+  ChevronRight,
+  Sparkles,
+  ArrowRight,
+  Loader2,
+  Search,
+  HelpCircle,
+  FileText
+} from 'lucide-react'
+
+export default function PelamarDashboard() {
+  const { user, profile } = useAuth()
+  const { toast } = useToast()
+
+  // Tabs: 'browse' atau 'applications'
+  const [activeTab, setActiveTab] = useState('browse')
+
+  // Data states
+  const [jobs, setJobs] = useState([])
+  const [applications, setApplications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+
+  // Selected job for detail modal/sheet
+  const [selectedJobDetail, setSelectedJobDetail] = useState(null)
+
+  const fetchData = async () => {
+    if (!user) return
+    setLoading(true)
+    try {
+      // 1. Ambil semua lowongan aktif beserta nama perusahaan perekrut
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('jobs')
+        .select(`
+          id,
+          title,
+          category,
+          description,
+          created_at,
+          perekrut:perekrut_id (
+            company_name,
+            full_name
+          )
+        `)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+
+      if (jobsError) throw jobsError
+
+      // 2. Ambil riwayat aplikasi milik pelamar ini
+      const { data: appsData, error: appsError } = await supabase
+        .from('applications')
+        .select(`
+          id,
+          job_id,
+          score,
+          status,
+          submitted_at,
+          job:job_id (
+            id,
+            title,
+            category,
+            perekrut:perekrut_id (
+              company_name
+            )
+          )
+        `)
+        .eq('pelamar_id', user.id)
+        .order('submitted_at', { ascending: false })
+
+      if (appsError) throw appsError
+
+      setJobs(jobsData || [])
+      setApplications(appsData || [])
+    } catch (err) {
+      console.error('Error fetching pelamar data:', err)
+      toast('Gagal memuat data pekerjaan', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [user])
+
+  // Set lowongan yang sudah pernah dikerjakan pelamar
+  const appliedJobIds = new Set(applications.map((a) => a.job_id))
+
+  // Filter jobs by search & category
+  const filteredJobs = jobs.filter((job) => {
+    const matchesSearch =
+      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (job.perekrut?.company_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || job.category === selectedCategory
+    return matchesSearch && matchesCategory
+  })
+
+  // Quick stats
+  const totalApplied = applications.length
+  const avgScore =
+    totalApplied > 0
+      ? Math.round(applications.reduce((acc, a) => acc + (a.score || 0), 0) / totalApplied)
+      : 0
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <Navbar />
+
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Header */}
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold mb-2">
+              <User className="w-3.5 h-3.5" />
+              Talenta Muda & Pencari Kerja
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              Halo, {profile?.full_name || 'Pelamar'} 👋
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Buktikan kompetensi Anda tanpa bias CV. Ikuti tes studi kasus AI 5 menit dan raih kesempatan kerja di UMKM.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant={activeTab === 'browse' ? 'default' : 'outline'}
+              onClick={() => setActiveTab('browse')}
+              className="gap-2"
+            >
+              <Briefcase className="w-4 h-4" />
+              Jelajahi Lowongan
+            </Button>
+            <Button
+              variant={activeTab === 'applications' ? 'default' : 'outline'}
+              onClick={() => setActiveTab('applications')}
+              className="gap-2"
+            >
+              <Award className="w-4 h-4" />
+              Lamaran Saya ({totalApplied})
+            </Button>
+          </div>
+        </div>
+
+        {/* Quick Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Lowongan Tersedia
+              </span>
+              <Briefcase className="w-5 h-5 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">{jobs.length}</div>
+              <p className="text-xs text-slate-500 mt-1">Siap diikuti tes skillnya</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Quiz Diselesaikan
+              </span>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">{totalApplied}</div>
+              <p className="text-xs text-slate-500 mt-1">Hasil terkirim ke perekrut</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Rata-Rata Skor Tes
+              </span>
+              <Award className="w-5 h-5 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">
+                {totalApplied > 0 ? `${avgScore} / 100` : '-'}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Verifikasi kemampuan riil</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* TAB 1: JELAJAHI LOWONGAN */}
+        {activeTab === 'browse' && (
+          <div className="space-y-6">
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari posisi atau nama UMKM..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
+              </div>
+
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Semua Kategori</option>
+                <option value="admin">Admin & Kesekretariatan</option>
+                <option value="kasir">Kasir & Pembayaran</option>
+                <option value="desainer">Desainer Grafis</option>
+                <option value="teknisi">Teknisi & Maintenance</option>
+                <option value="marketing">Marketing & Media Sosial</option>
+                <option value="gudang">Gudang & Logistik</option>
+                <option value="customer_service">Customer Service</option>
+                <option value="keuangan">Keuangan & Akuntansi</option>
+                <option value="driver">Driver & Kurir</option>
+                <option value="produksi">Produksi & Manufaktur</option>
+                <option value="it">IT & Teknologi</option>
+                <option value="fnb">F&B & Barista</option>
+                <option value="cleaning">Cleaning Service</option>
+                <option value="security">Security</option>
+                <option value="sales">Sales & Agen</option>
+              </select>
+            </div>
+
+            {loading ? (
+              <div className="p-16 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+                <span className="text-sm text-slate-500">Memuat lowongan pekerjaan...</span>
+              </div>
+            ) : filteredJobs.length === 0 ? (
+              <Card className="text-center p-12 bg-white border-dashed">
+                <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-base font-semibold text-slate-800">Tidak ada lowongan ditemukan</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Coba ganti kata kunci pencarian atau pilih kategori lain.
+                </p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredJobs.map((job) => {
+                  const isApplied = appliedJobIds.has(job.id)
+                  const myApp = applications.find((a) => a.job_id === job.id)
+
+                  return (
+                    <Card
+                      key={job.id}
+                      className="flex flex-col justify-between hover:shadow-md transition border-slate-200"
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <Badge variant="default" className="capitalize text-[11px]">
+                            {job.category}
+                          </Badge>
+                          <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(job.created_at).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </span>
+                        </div>
+                        <CardTitle className="text-lg font-bold text-slate-900 leading-snug line-clamp-1">
+                          {job.title}
+                        </CardTitle>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium pt-1">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{job.perekrut?.company_name || 'UMKM Lokal'}</span>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="pt-0 flex-1 flex flex-col justify-between">
+                        <p className="text-xs text-slate-600 line-clamp-2 mb-4 leading-relaxed">
+                          {job.description || 'Perekrut mencari kandidat yang siap diuji dengan 5 soal studi kasus praktis AI.'}
+                        </p>
+
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                          {isApplied ? (
+                            <div className="flex items-center justify-between w-full">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                                <CheckCircle2 className="w-4 h-4" /> Sudah Dikerjakan
+                              </span>
+                              <span className="text-xs font-bold px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg">
+                                Skor: {myApp?.score}
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedJobDetail(job)}
+                                className="text-xs text-slate-600 hover:text-slate-900"
+                              >
+                                Detail
+                              </Button>
+                              <Link to={`/quiz/${job.id}`}>
+                                <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-xs">
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  Mulai Quiz
+                                </Button>
+                              </Link>
+                            </>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: LAMARAN SAYA */}
+        {activeTab === 'applications' && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-4">
+              <Award className="w-5 h-5 text-amber-500" />
+              Riwayat Tes & Lamaran Saya ({applications.length})
+            </h2>
+
+            {loading ? (
+              <div className="p-16 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+                <span className="text-sm text-slate-500">Memuat riwayat lamaran...</span>
+              </div>
+            ) : applications.length === 0 ? (
+              <Card className="text-center p-12 bg-white border-dashed">
+                <Award className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-base font-semibold text-slate-800">Belum Ada Lamaran</h3>
+                <p className="text-xs text-slate-500 mt-1 mb-4">
+                  Anda belum mengerjakan quiz untuk lowongan manapun.
+                </p>
+                <Button onClick={() => setActiveTab('browse')} size="sm">
+                  Cari Lowongan Sekarang
+                </Button>
+              </Card>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase border-b border-slate-100">
+                      <tr>
+                        <th className="px-6 py-3.5">Posisi Pekerjaan</th>
+                        <th className="px-6 py-3.5">Perusahaan UMKM</th>
+                        <th className="px-6 py-3.5">Kategori</th>
+                        <th className="px-6 py-3.5">Skor Quiz</th>
+                        <th className="px-6 py-3.5">Status Lamaran</th>
+                        <th className="px-6 py-3.5">Waktu Submit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {applications.map((app) => {
+                        const status = app.status || 'Menunggu Review'
+                        const companyName = app.job?.perekrut?.company_name || 'UMKM Perekrut'
+
+                        let statusBadge = (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                            Menunggu Review
+                          </span>
+                        )
+
+                        if (status === 'Shortlisted') {
+                          statusBadge = (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                              Shortlisted
+                            </span>
+                          )
+                        } else if (status === 'Dihubungi') {
+                          statusBadge = (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                              Dihubungi
+                            </span>
+                          )
+                        } else if (status === 'Ditolak') {
+                          statusBadge = (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                              Ditolak
+                            </span>
+                          )
+                        }
+
+                        return (
+                          <tr key={app.id} className="hover:bg-slate-50/70 transition">
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-slate-900">{app.job?.title || 'Posisi Lowongan'}</div>
+                              {status === 'Dihubungi' && (
+                                <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
+                                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="font-bold text-emerald-950">Selamat! {companyName}</span> tertarik dengan kualifikasi tes Anda.
+                                    <p className="text-emerald-700 mt-0.5 font-medium">
+                                      Perekrut akan menghubungi kamu melalui nomor HP yang kamu daftarkan.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-slate-700 text-xs font-medium">
+                              {companyName}
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge variant="default" className="text-[10px] capitalize">
+                                {app.job?.category || 'Umum'}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                  app.score >= 80
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : app.score >= 60
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {app.score} / 100
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              {statusBadge}
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
+                              {new Date(app.submitted_at).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Modal Job Detail */}
+      {selectedJobDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <Badge variant="default" className="capitalize">
+                {selectedJobDetail.category}
+              </Badge>
+              <span className="text-xs text-slate-400">
+                Diposting{' '}
+                {new Date(selectedJobDetail.created_at).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                })}
+              </span>
+            </div>
+
+            <h2 className="text-xl font-bold text-slate-900">{selectedJobDetail.title}</h2>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1 mb-4">
+              <Building2 className="w-4 h-4 text-slate-400" />
+              <span>{selectedJobDetail.perekrut?.company_name || 'UMKM Lokal'}</span>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-sm text-slate-700 leading-relaxed mb-6">
+              <div className="font-semibold text-xs text-slate-500 uppercase tracking-wider mb-1">
+                Deskripsi Pekerjaan
+              </div>
+              <p className="whitespace-pre-line text-xs sm:text-sm">
+                {selectedJobDetail.description || 'Tidak ada catatan khusus dari perekrut.'}
+              </p>
+            </div>
+
+            <div className="bg-blue-50/70 border border-blue-200/60 rounded-xl p-4 mb-6 text-xs text-blue-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                Format Seleksi AI:
+              </div>
+              <p>
+                Anda akan mengerjakan 5 soal studi kasus pilihan ganda. Skor Anda langsung tercatat dan menjadi dasar seleksi perekrut.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setSelectedJobDetail(null)}
+              >
+                Tutup
+              </Button>
+              <Link to={`/quiz/${selectedJobDetail.id}`}>
+                <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                  Mulai Quiz Sekarang
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

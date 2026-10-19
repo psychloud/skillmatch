@@ -1,0 +1,915 @@
+import React, { useState, useEffect } from 'react'
+import { Navbar } from '../../components/Navbar'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+import { supabase } from '../../lib/supabase'
+import { generateQuiz } from '../../lib/ai'
+import { Button } from '../../components/ui/button'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import {
+  Building2,
+  Plus,
+  Users,
+  FileCheck2,
+  Sparkles,
+  Loader2,
+  Trophy,
+  Calendar,
+  ChevronRight,
+  HelpCircle,
+  Briefcase,
+  X,
+  AlertCircle,
+  Eye,
+  Phone,
+  MapPin,
+  GraduationCap,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react'
+
+const JOB_CATEGORIES = [
+  { value: 'admin', label: 'Admin & Kesekretariatan' },
+  { value: 'kasir', label: 'Kasir & Pembayaran' },
+  { value: 'desainer', label: 'Desainer Grafis' },
+  { value: 'teknisi', label: 'Teknisi & Maintenance' },
+  { value: 'marketing', label: 'Marketing & Media Sosial' },
+  { value: 'gudang', label: 'Gudang & Logistik' },
+  { value: 'customer_service', label: 'Customer Service' },
+  { value: 'keuangan', label: 'Keuangan & Akuntansi' },
+  { value: 'driver', label: 'Driver & Kurir' },
+  { value: 'produksi', label: 'Produksi & Manufaktur' },
+  { value: 'it', label: 'IT & Teknologi' },
+  { value: 'fnb', label: 'F&B & Barista' },
+  { value: 'cleaning', label: 'Cleaning Service' },
+  { value: 'security', label: 'Security' },
+  { value: 'sales', label: 'Sales & Agen' },
+]
+
+export default function PerekrutDashboard() {
+  const { user, profile } = useAuth()
+  const { toast } = useToast()
+
+  // State lowongan & kandidat
+  const [jobs, setJobs] = useState([])
+  const [loadingJobs, setLoadingJobs] = useState(true)
+  const [selectedJob, setSelectedJob] = useState(null)
+  const [applicants, setApplicants] = useState([])
+  const [jobQuestions, setJobQuestions] = useState([])
+  const [loadingApplicants, setLoadingApplicants] = useState(false)
+  const [activeApplicant, setActiveApplicant] = useState(null)
+
+  // Modal / Form state
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [jobTitle, setJobTitle] = useState('')
+  const [category, setCategory] = useState('admin')
+  const [description, setDescription] = useState('')
+
+  // Fetch semua lowongan milik perekrut ini
+  const fetchJobs = async () => {
+    if (!user) return
+    setLoadingJobs(true)
+    try {
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('jobs')
+        .select(`
+          id,
+          title,
+          category,
+          description,
+          created_at,
+          applications (
+            id,
+            score
+          )
+        `)
+        .eq('perekrut_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (jobsError) throw jobsError
+
+      // Format data: hitung applicant count & average score
+      const formatted = (jobsData || []).map((job) => {
+        const apps = job.applications || []
+        const count = apps.length
+        const avg = count > 0 ? Math.round(apps.reduce((sum, a) => sum + (a.score || 0), 0) / count) : 0
+        return {
+          ...job,
+          applicantCount: count,
+          averageScore: avg,
+        }
+      })
+
+      setJobs(formatted)
+
+      // Auto-select job pertama jika belum ada yang dipilih
+      if (formatted.length > 0 && !selectedJob) {
+        selectJob(formatted[0])
+      }
+    } catch (err) {
+      console.error('Error fetching jobs:', err)
+      toast('Gagal memuat daftar lowongan', 'error')
+    } finally {
+      setLoadingJobs(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchJobs()
+  }, [user])
+
+  // Pilih lowongan untuk melihat pelamar & soalnya
+  const selectJob = async (job) => {
+    setSelectedJob(job)
+    setLoadingApplicants(true)
+    try {
+      // 1. Ambil applications beserta profil pelamar
+      const { data: appsData, error: appsError } = await supabase
+        .from('applications')
+        .select(`
+          id,
+          score,
+          answers,
+          status,
+          submitted_at,
+          pelamar:pelamar_id (
+            id,
+            full_name,
+            phone,
+            domisili,
+            pendidikan,
+            ringkasan
+          )
+        `)
+        .eq('job_id', job.id)
+        .order('score', { ascending: false })
+
+      if (appsError) throw appsError
+      setApplicants(appsData || [])
+
+      // 2. Ambil soal yang digenerate AI untuk lowongan ini
+      const { data: qData, error: qError } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('job_id', job.id)
+        .order('order_num', { ascending: true })
+
+      if (!qError) {
+        setJobQuestions(qData || [])
+      }
+    } catch (err) {
+      console.error('Error fetching applicants:', err)
+      toast('Gagal mengambil daftar pelamar', 'error')
+    } finally {
+      setLoadingApplicants(false)
+    }
+  }
+
+  // Update status pelamar (Menunggu Review, Shortlisted, Dihubungi, Ditolak)
+  const handleUpdateStatus = async (applicationId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .update({ status: newStatus })
+        .eq('id', applicationId)
+
+      if (error) throw error
+
+      setApplicants((prev) =>
+        prev.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app))
+      )
+      if (activeApplicant?.id === applicationId) {
+        setActiveApplicant((prev) => ({ ...prev, status: newStatus }))
+      }
+
+      toast(`Status kandidat berhasil diubah jadi "${newStatus}"`, 'success')
+    } catch (err) {
+      console.error('Failed to update status:', err)
+      toast(`Gagal mengubah status: ${err.message}`, 'error')
+    }
+  }
+
+  // Handle pembuatan lowongan baru + AI generation
+  const handleCreateJob = async (e) => {
+    e.preventDefault()
+    if (!jobTitle.trim()) {
+      toast('Judul lowongan wajib diisi', 'error')
+      return
+    }
+
+    setCreating(true)
+    toast('Sedang meminta AI merancang 5 soal tes praktis...', 'info', 3000)
+
+    try {
+      // 1. Generate soal AI via SumoPod API
+      const questions = await generateQuiz(category, jobTitle)
+      if (!questions || questions.length === 0) {
+        throw new Error('Gagal menghasilkan soal dari AI')
+      }
+
+      // 2. Pastikan profil perekrut ada di tabel profiles (mencegah foreign key constraint error)
+      const { error: profileCheckError } = await supabase.from('profiles').upsert({
+        id: user.id,
+        role: profile?.role || user.user_metadata?.role || 'perekrut',
+        full_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0],
+        company_name: profile?.company_name || user.user_metadata?.company_name || 'Perusahaan UMKM',
+      })
+      if (profileCheckError) {
+        console.warn('Upsert profile notice:', profileCheckError)
+      }
+
+      // 3. Simpan Job ke database Supabase
+      const { data: newJob, error: jobError } = await supabase
+        .from('jobs')
+        .insert({
+          perekrut_id: user.id,
+          title: jobTitle,
+          category,
+          description: description || null,
+          is_active: true,
+        })
+        .select()
+        .single()
+
+      if (jobError) throw jobError
+
+      // 3. Simpan 5 Pertanyaan ke database Supabase
+      const questionsToInsert = questions.map((q, idx) => ({
+        job_id: newJob.id,
+        question_text: q.question,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        correct_answer: (q.correct_answer || 'a').toLowerCase(),
+        order_num: idx + 1,
+      }))
+
+      const { error: qError } = await supabase.from('questions').insert(questionsToInsert)
+      if (qError) {
+        console.warn('Questions insert error:', qError)
+      }
+
+      toast('Lowongan & 5 Soal AI berhasil diterbitkan!', 'success')
+
+      // Reset form & reload
+      setJobTitle('')
+      setDescription('')
+      setShowCreateModal(false)
+      await fetchJobs()
+      selectJob({ ...newJob, applicantCount: 0, averageScore: 0 })
+    } catch (err) {
+      console.error(err)
+      toast(`Gagal membuat lowongan: ${err.message}`, 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // Ringkasan metrik statistik
+  const totalJobs = jobs.length
+  const totalApplicants = jobs.reduce((sum, j) => sum + (j.applicantCount || 0), 0)
+  const overallAvg =
+    totalApplicants > 0
+      ? Math.round(
+          jobs.reduce((sum, j) => sum + (j.averageScore * j.applicantCount), 0) / totalApplicants
+        )
+      : 0
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <Navbar />
+
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold mb-2">
+              <Building2 className="w-3.5 h-3.5" />
+              {profile?.company_name || 'Dashboard Perekrut UMKM'}
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              Panel Rekrutmen & Verifikasi AI
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Buat lowongan dengan 1 klik. AI SumoPod otomatis menyusun 5 tes studi kasus untuk menyaring kandidat terbaik.
+            </p>
+          </div>
+
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            size="lg"
+            className="gap-2 shrink-0 self-start sm:self-center shadow-lg shadow-blue-500/20"
+          >
+            <Plus className="w-5 h-5" />
+            Buka Lowongan Baru
+          </Button>
+        </div>
+
+        {/* Quick Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Total Lowongan
+              </span>
+              <FileCheck2 className="w-5 h-5 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">{totalJobs}</div>
+              <p className="text-xs text-slate-500 mt-1">Posisi kerja yang aktif dibuka</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Total Pelamar Masuk
+              </span>
+              <Users className="w-5 h-5 text-emerald-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">{totalApplicants}</div>
+              <p className="text-xs text-slate-500 mt-1">Kandidat yang telah menyelesaikan tes</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Rata-rata Skor Tes
+              </span>
+              <Trophy className="w-5 h-5 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">
+                {totalApplicants > 0 ? `${overallAvg}/100` : '-'}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Skor validasi kemampuan nyata</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Content: Split View Table Lowongan & Detail Ranking */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Kolom Kiri: Tabel Daftar Lowongan (5 Kolom di Layar Lebar) */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-blue-600" />
+                Daftar Lowongan ({jobs.length})
+              </h2>
+            </div>
+
+            {loadingJobs ? (
+              <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
+                <span className="text-xs text-slate-500">Memuat lowongan...</span>
+              </div>
+            ) : jobs.length === 0 ? (
+              <Card className="text-center p-8 bg-white border-dashed">
+                <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-slate-800">Belum Ada Lowongan</h3>
+                <p className="text-xs text-slate-500 mt-1 mb-4">
+                  Klik tombol di bawah untuk membuat lowongan pertama Anda.
+                </p>
+                <Button onClick={() => setShowCreateModal(true)} size="sm" variant="outline">
+                  <Plus className="w-4 h-4 mr-1" /> Buat Lowongan
+                </Button>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {jobs.map((job) => {
+                  const isSelected = selectedJob?.id === job.id
+                  return (
+                    <div
+                      key={job.id}
+                      onClick={() => selectJob(job)}
+                      className={`p-4 rounded-xl border transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-500/20 shadow-sm'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <Badge variant="default" className="text-[10px] px-2 py-0.5 mb-1.5 capitalize">
+                            {job.category}
+                          </Badge>
+                          <h3 className="font-bold text-slate-900 text-sm">{job.title}</h3>
+                        </div>
+                        <ChevronRight className={`w-5 h-5 transition ${isSelected ? 'text-blue-600 translate-x-1' : 'text-slate-400'}`} />
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span className="flex items-center gap-1 font-medium text-slate-700">
+                          <Users className="w-3.5 h-3.5 text-blue-600" />
+                          {job.applicantCount} Pelamar
+                        </span>
+                        <span>
+                          Rata-rata:{' '}
+                          <strong className="text-slate-800">
+                            {job.applicantCount > 0 ? `${job.averageScore} pt` : '-'}
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Kolom Kanan: Detail Ranking Pelamar untuk Job Terpilih (7 Kolom di Layar Lebar) */}
+          <div className="lg:col-span-7">
+            {selectedJob ? (
+              <Card className="bg-white">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="default" className="capitalize text-xs">
+                          {selectedJob.category}
+                        </Badge>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(selectedJob.created_at).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                      <CardTitle className="text-xl font-bold">{selectedJob.title}</CardTitle>
+                      {selectedJob.description && (
+                        <p className="text-xs text-slate-600 mt-1">{selectedJob.description}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-amber-500" />
+                      Peringkat Pelamar Teratas (Berdasarkan Skor)
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      Total: {applicants.length} kandidat
+                    </span>
+                  </div>
+
+                  {loadingApplicants ? (
+                    <div className="p-12 text-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
+                      <span className="text-xs text-slate-500">Memuat peringkat kandidat...</span>
+                    </div>
+                  ) : applicants.length === 0 ? (
+                    <div className="text-center py-12 px-4 border border-dashed rounded-xl bg-slate-50/50">
+                      <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-slate-700">Belum ada pelamar yang submit quiz</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Ketika pelamar mengerjakan quiz pada lowongan ini, nama dan skornya akan otomatis muncul di sini.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase border-b border-slate-100">
+                          <tr>
+                            <th className="px-4 py-3">Rank</th>
+                            <th className="px-4 py-3">Nama Pelamar</th>
+                            <th className="px-4 py-3">Skor Tes</th>
+                            <th className="px-4 py-3">Status Lamaran</th>
+                            <th className="px-4 py-3">Pendidikan</th>
+                            <th className="px-4 py-3">Domisili</th>
+                            <th className="px-4 py-3">No. HP</th>
+                            <th className="px-4 py-3">Waktu Submit</th>
+                            <th className="px-4 py-3 text-right">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {applicants.map((app, index) => {
+                            const pelamar = app.pelamar || {}
+                            const currentStatus = app.status || 'Menunggu Review'
+                            return (
+                              <tr
+                                key={app.id}
+                                className={`transition hover:bg-slate-50/80 ${
+                                  index === 0 ? 'bg-amber-50/40' : ''
+                                }`}
+                              >
+                                <td className="px-4 py-3 font-bold">
+                                  {index === 0 && <span className="text-amber-500 mr-1">🥇</span>}
+                                  {index === 1 && <span className="text-slate-400 mr-1">🥈</span>}
+                                  {index === 2 && <span className="text-amber-700 mr-1">🥉</span>}
+                                  #{index + 1}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="font-semibold text-slate-900">
+                                    {pelamar.full_name || 'Pelamar Kerja'}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                      app.score >= 80
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : app.score >= 60
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}
+                                  >
+                                    {app.score} / 100
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <select
+                                    value={currentStatus}
+                                    onChange={(e) => handleUpdateStatus(app.id, e.target.value)}
+                                    className={`text-xs font-semibold px-2.5 py-1 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 transition cursor-pointer ${
+                                      currentStatus === 'Shortlisted'
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : currentStatus === 'Dihubungi'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                        : currentStatus === 'Ditolak'
+                                        ? 'bg-red-50 text-red-700 border-red-200'
+                                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    <option value="Menunggu Review">Menunggu Review</option>
+                                    <option value="Shortlisted">Shortlisted</option>
+                                    <option value="Dihubungi">Dihubungi</option>
+                                    <option value="Ditolak">Ditolak</option>
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-medium text-slate-700">
+                                  {pelamar.pendidikan ? (
+                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+                                      {pelamar.pendidikan}
+                                    </span>
+                                  ) : (
+                                    '-'
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-slate-600">
+                                  {pelamar.domisili || '-'}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-slate-600 font-mono">
+                                  {pelamar.phone || '-'}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                                  {new Date(app.submitted_at).toLocaleDateString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setActiveApplicant(app)}
+                                    className="gap-1.5 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    Lihat Profil
+                                  </Button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* 5 Soal yang Digenerate AI */}
+                  {jobQuestions.length > 0 && (
+                    <div className="mt-8 pt-6 border-t border-slate-100">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="w-4 h-4 text-blue-600" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                          5 Soal Praktis yang Disusun AI SumoPod
+                        </h4>
+                      </div>
+
+                      <div className="space-y-3">
+                        {jobQuestions.map((q, idx) => (
+                          <div
+                            key={q.id || idx}
+                            className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs space-y-1.5"
+                          >
+                            <p className="font-semibold text-slate-900">
+                              {idx + 1}. {q.question_text}
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-slate-600 pl-4">
+                              <span className={q.correct_answer === 'a' ? 'font-bold text-emerald-600' : ''}>
+                                A. {q.option_a}
+                              </span>
+                              <span className={q.correct_answer === 'b' ? 'font-bold text-emerald-600' : ''}>
+                                B. {q.option_b}
+                              </span>
+                              <span className={q.correct_answer === 'c' ? 'font-bold text-emerald-600' : ''}>
+                                C. {q.option_c}
+                              </span>
+                              <span className={q.correct_answer === 'd' ? 'font-bold text-emerald-600' : ''}>
+                                D. {q.option_d}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="p-12 text-center bg-white border-dashed">
+                <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                <h3 className="text-base font-semibold text-slate-800">Pilih Lowongan</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Pilih lowongan di sebelah kiri untuk melihat peringkat pelamar dan bank soal AI.
+                </p>
+              </Card>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* Modal Buat Lowongan Baru */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => !creating && setShowCreateModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition"
+              disabled={creating}
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-2">
+              <span className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                <Sparkles className="w-5 h-5" />
+              </span>
+              <h2 className="text-xl font-bold text-slate-900">Buka Lowongan Baru</h2>
+            </div>
+            <p className="text-xs text-slate-500 mb-6">
+              AI SumoPod akan secara otomatis membuat 5 soal studi kasus nyata pilihan ganda berdasarkan posisi ini.
+            </p>
+
+            <form onSubmit={handleCreateJob} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Judul Posisi Pekerjaan
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={jobTitle}
+                  onChange={(e) => setJobTitle(e.target.value)}
+                  placeholder="Contoh: Kasir Shift Pagi Resto Kopi"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Kategori Posisi (Target Soal AI)
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  {JOB_CATEGORIES.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Deskripsi Singkat / Syarat Khusus (Opsional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Contoh: Lokasi outlet Jakarta Selatan, jam kerja 08:00 - 16:00, teliti & ramah."
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={creating}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={creating}
+                  className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {creating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>AI Sedang Merancang Soal...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Terbitkan & Buat Quiz AI</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Detail Profil & Jawaban Kuis Pelamar */}
+      {activeApplicant && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4 mb-5">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">
+                  Profil Pelamar & Hasil Quiz
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 mt-2">
+                  {activeApplicant.pelamar?.full_name || 'Pelamar Kerja'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Melamar untuk posisi: <span className="font-semibold text-slate-700">{selectedJob?.title}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveApplicant(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Profile Information Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs">
+              <div className="flex items-center gap-2 text-slate-700">
+                <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Nomor WhatsApp / HP</span>
+                  <span className="font-medium text-slate-900">{activeApplicant.pelamar?.phone || '-'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-slate-700">
+                <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Domisili</span>
+                  <span className="font-medium text-slate-900">{activeApplicant.pelamar?.domisili || '-'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-slate-700">
+                <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Pendidikan Terakhir</span>
+                  <span className="font-medium text-slate-900">{activeApplicant.pelamar?.pendidikan || '-'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-slate-700">
+                <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Skor Tes Kuis</span>
+                  <span className="font-bold text-slate-900 text-sm">
+                    {activeApplicant.score} / 100
+                  </span>
+                </div>
+              </div>
+
+              {activeApplicant.pelamar?.ringkasan && (
+                <div className="sm:col-span-2 pt-2 border-t border-slate-200/60 mt-1">
+                  <span className="text-[10px] text-slate-400 block uppercase font-semibold mb-1">
+                    Ringkasan Diri / Bio
+                  </span>
+                  <p className="text-slate-700 leading-relaxed italic bg-white p-2.5 rounded-lg border border-slate-200">
+                    "{activeApplicant.pelamar.ringkasan}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Breakdown Jawaban Soal Quiz */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-blue-600" />
+                  Rincian Jawaban Soal Quiz ({jobQuestions.length} Soal)
+                </h4>
+                <span className="text-xs text-slate-500">
+                  Kunci Hijau = Benar, Merah = Jawaban Salah
+                </span>
+              </div>
+
+              {jobQuestions.length === 0 ? (
+                <p className="text-xs text-slate-500 italic py-4 text-center">Data pertanyaan tidak ditemukan.</p>
+              ) : (
+                <div className="space-y-4">
+                  {jobQuestions.map((q, idx) => {
+                    const applicantAnswer = activeApplicant.answers?.[q.id] || activeApplicant.answers?.[`q${idx + 1}`] || activeApplicant.answers?.[idx]
+                    const isCorrect = applicantAnswer && applicantAnswer.toLowerCase() === (q.correct_answer || '').toLowerCase()
+
+                    return (
+                      <div
+                        key={q.id || idx}
+                        className="p-4 rounded-xl border border-slate-200 bg-white space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-xs font-semibold text-slate-900">
+                            <span className="text-blue-600 mr-1.5">Soal {idx + 1}.</span>
+                            {q.question_text}
+                          </p>
+                          {isCorrect ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md shrink-0">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Benar (+20)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md shrink-0">
+                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                              Salah (0)
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Opsi Jawaban */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {['a', 'b', 'c', 'd'].map((opt) => {
+                            const optText = q[`option_${opt}`]
+                            const isSelected = applicantAnswer && applicantAnswer.toLowerCase() === opt
+                            const isKey = (q.correct_answer || '').toLowerCase() === opt
+
+                            let styleClass = 'border-slate-200 bg-slate-50 text-slate-600'
+                            if (isSelected && isKey) {
+                              styleClass = 'border-emerald-400 bg-emerald-50/80 text-emerald-900 font-medium ring-1 ring-emerald-500'
+                            } else if (isSelected && !isKey) {
+                              styleClass = 'border-rose-400 bg-rose-50/80 text-rose-900 font-medium ring-1 ring-rose-500'
+                            } else if (isKey) {
+                              styleClass = 'border-emerald-300 bg-emerald-50/40 text-emerald-800'
+                            }
+
+                            return (
+                              <div
+                                key={opt}
+                                className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${styleClass}`}
+                              >
+                                <span className="font-bold uppercase shrink-0">{opt}.</span>
+                                <span className="flex-1">{optText}</span>
+                                {isSelected && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-white/80 shrink-0">
+                                    Pilihan Pelamar
+                                  </span>
+                                )}
+                                {isKey && !isSelected && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-emerald-100 text-emerald-800 shrink-0">
+                                    Kunci Jawaban
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveApplicant(null)}
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
