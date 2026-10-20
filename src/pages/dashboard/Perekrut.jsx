@@ -464,7 +464,7 @@ export default function PerekrutDashboard() {
         console.warn('Questions insert error:', qError)
       }
 
-      toast('Lowongan & 5 Soal AI berhasil diterbitkan!', 'success')
+      toast('Lowongan & Soal berhasil diterbitkan!', 'success')
 
       // Reset form & reload
       setJobTitle('')
