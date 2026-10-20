@@ -23,6 +23,23 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment Variables
+# Environment Variables & Credentials
 .env
-.env.production
+.env.*
+!.env.example
+apianon.md
+credentials*
+*credential*
+*.secret*
+
+# Database Schemas & Dumps
+skema.json
+skemadb.md
+*skema*
+schema.sql
+*.sql
+
+# Panduan Awal & Competition Docs
+SkillMatch — Panduan Build Lomba.md
+*Panduan*.md
+*panduan*.md
