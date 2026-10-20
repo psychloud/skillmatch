@@ -78,6 +78,10 @@ export default function PerekrutDashboard() {
   const [deletingJob, setDeletingJob] = useState(false)
   const [togglingJobId, setTogglingJobId] = useState(null)
 
+  // State generate ulang soal
+  const [regeneratingQuestions, setRegeneratingQuestions] = useState(false)
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+
   // Modal / Form state
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -326,6 +330,71 @@ export default function PerekrutDashboard() {
     } catch (err) {
       console.error('Failed to update status:', err)
       toast(`Gagal mengubah status: ${err.message}`, 'error')
+    }
+  }
+
+  // Handle Generate Ulang Soal Tes AI
+  const handleRegenerateQuestions = async () => {
+    if (!selectedJob) return
+    setShowRegenerateConfirm(false)
+    setRegeneratingQuestions(true)
+    toast('Sedang merancang 5 soal tes baru dengan AI...', 'info', 3000)
+
+    try {
+      // 1. Call generateQuiz(category, jobTitle) for that job
+      const newQuestions = await generateQuiz(selectedJob.category, selectedJob.title)
+      if (!newQuestions || newQuestions.length === 0) {
+        throw new Error('Gagal menghasilkan soal dari AI')
+      }
+
+      // 2. Delete existing questions for that job_id from questions table
+      const { error: delError } = await supabase
+        .from('questions')
+        .delete()
+        .eq('job_id', selectedJob.id)
+
+      if (delError) {
+        console.warn('Note deleting old questions:', delError)
+      }
+
+      // 3. Format and insert new 5 questions
+      const questionsToInsert = newQuestions.map((q, idx) => ({
+        job_id: selectedJob.id,
+        question_text: q.question,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        correct_answer: (q.correct_answer || 'a').toLowerCase(),
+        order_num: idx + 1,
+      }))
+
+      const { data: insertedData, error: insError } = await supabase
+        .from('questions')
+        .insert(questionsToInsert)
+        .select()
+
+      if (insError) throw insError
+
+      // 4. Refresh the questions display
+      if (insertedData && insertedData.length > 0) {
+        setJobQuestions(insertedData)
+      } else {
+        const { data: freshQ } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('job_id', selectedJob.id)
+          .order('order_num', { ascending: true })
+        setJobQuestions(freshQ || questionsToInsert)
+      }
+
+      // 5. Show success toast
+      toast('5 soal baru berhasil dibuat', 'success')
+    } catch (err) {
+      console.error('Error regenerating questions:', err)
+      toast(`Gagal membuat soal baru: ${err.message || 'Error AI'}`, 'error')
+    } finally {
+      setRegeneratingQuestions(false)
     }
   }
 
@@ -842,15 +911,50 @@ export default function PerekrutDashboard() {
                   )}
 
                   {/* 5 Soal yang Digenerate AI */}
-                  {jobQuestions.length > 0 && (
-                    <div className="mt-8 pt-6 border-t border-slate-100">
-                      <div className="flex items-center gap-2 mb-3">
+                  <div className="mt-8 pt-6 border-t border-slate-100">
+                    <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                      <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-blue-600" />
                         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Soal
+                          5 Soal Studi Kasus AI
                         </h4>
                       </div>
 
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={regeneratingQuestions}
+                        onClick={() => setShowRegenerateConfirm(true)}
+                        className="gap-1.5 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700 shadow-2xs transition"
+                      >
+                        {regeneratingQuestions ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                            <span>Membuat Soal Baru...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Generate Ulang Soal</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {jobQuestions.length === 0 ? (
+                      <div className="p-6 text-center bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                        <p className="text-xs text-slate-500 mb-3">Belum ada bank soal untuk lowongan ini.</p>
+                        <Button
+                          size="sm"
+                          disabled={regeneratingQuestions}
+                          onClick={() => setShowRegenerateConfirm(true)}
+                          className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> Buat Soal Sekarang
+                        </Button>
+                      </div>
+                    ) : (
                       <div className="space-y-3">
                         {jobQuestions.map((q, idx) => (
                           <div
@@ -877,8 +981,8 @@ export default function PerekrutDashboard() {
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ) : (
@@ -1212,6 +1316,60 @@ export default function PerekrutDashboard() {
                   <>
                     <Trash2 className="w-4 h-4" />
                     Hapus Permanen
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Generate Ulang Soal */}
+      {showRegenerateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center mb-4">
+              <Sparkles className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-900">Generate Ulang Soal?</h3>
+            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+              Soal lama akan diganti. Lanjutkan?
+            </p>
+
+            <div className="mt-3 p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-xs text-blue-800 leading-normal">
+              💡 AI akan merancang 5 soal studi kasus baru pilihan ganda berdasarkan posisi <strong className="font-semibold text-blue-950">"{selectedJob?.title}"</strong>.
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={regeneratingQuestions}
+                onClick={() => setShowRegenerateConfirm(false)}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={regeneratingQuestions}
+                onClick={handleRegenerateQuestions}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
+              >
+                {regeneratingQuestions ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Lanjutkan
                   </>
                 )}
               </Button>
