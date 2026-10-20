@@ -486,8 +486,8 @@ export default function PerekrutDashboard() {
   const overallAvg =
     totalApplicants > 0
       ? Math.round(
-          jobs.reduce((sum, j) => sum + (j.averageScore * j.applicantCount), 0) / totalApplicants
-        )
+        jobs.reduce((sum, j) => sum + (j.averageScore * j.applicantCount), 0) / totalApplicants
+      )
       : 0
 
   return (
@@ -614,15 +614,14 @@ export default function PerekrutDashboard() {
                     <div
                       key={job.id}
                       onClick={() => selectJob(job)}
-                      className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer card-hover animate-fade-in-up ${
-                        isSelected
+                      className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer card-hover animate-fade-in-up ${isSelected
                           ? isActive
                             ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-500/20 shadow-sm'
                             : 'bg-slate-100/90 border-slate-300 ring-2 ring-slate-400/20 shadow-sm opacity-85'
                           : isActive
-                          ? 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
-                          : 'bg-slate-50/80 border-slate-200 opacity-60 grayscale-[30%] hover:opacity-85'
-                      }`}
+                            ? 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                            : 'bg-slate-50/80 border-slate-200 opacity-60 grayscale-[30%] hover:opacity-85'
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
@@ -632,32 +631,28 @@ export default function PerekrutDashboard() {
                               {job.category}
                             </Badge>
                             <span
-                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                isActive
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${isActive
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : 'bg-slate-200/70 text-slate-600 border-slate-300'
-                              }`}
+                                }`}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                                  }`}
                               ></span>
                               {isActive ? 'Aktif' : 'Nonaktif'}
                             </span>
                           </div>
                           <h3
-                            className={`font-bold text-sm ${
-                              isActive ? 'text-slate-900' : 'text-slate-600'
-                            }`}
+                            className={`font-bold text-sm ${isActive ? 'text-slate-900' : 'text-slate-600'
+                              }`}
                           >
                             {job.title}
                           </h3>
                         </div>
                         <ChevronRight
-                          className={`w-5 h-5 transition shrink-0 ${
-                            isSelected ? 'text-blue-600 translate-x-1' : 'text-slate-400'
-                          }`}
+                          className={`w-5 h-5 transition shrink-0 ${isSelected ? 'text-blue-600 translate-x-1' : 'text-slate-400'
+                            }`}
                         />
                       </div>
 
@@ -682,11 +677,10 @@ export default function PerekrutDashboard() {
                             onClick={(e) => toggleJobStatus(job, e)}
                             disabled={togglingJobId === job.id}
                             title={isActive ? 'Klik untuk menonaktifkan lowongan' : 'Klik untuk mengaktifkan lowongan'}
-                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border transition shadow-2xs ${
-                              isActive
+                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border transition shadow-2xs ${isActive
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                            }`}
+                              }`}
                           >
                             {togglingJobId === job.id ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -731,16 +725,14 @@ export default function PerekrutDashboard() {
                           {selectedJob.category}
                         </Badge>
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                            selectedJob.is_active !== false
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${selectedJob.is_active !== false
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : 'bg-slate-100 text-slate-600 border-slate-300'
-                          }`}
+                            }`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              selectedJob.is_active !== false ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-                            }`}
+                            className={`w-1.5 h-1.5 rounded-full ${selectedJob.is_active !== false ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                              }`}
                           ></span>
                           {selectedJob.is_active !== false ? 'Aktif Menerima Lamaran' : 'Lowongan Nonaktif'}
                         </span>
@@ -766,11 +758,10 @@ export default function PerekrutDashboard() {
                         onClick={(e) => toggleJobStatus(selectedJob, e)}
                         disabled={togglingJobId === selectedJob.id}
                         title={selectedJob.is_active !== false ? 'Nonaktifkan lowongan ini' : 'Aktifkan lowongan ini'}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition shadow-xs ${
-                          selectedJob.is_active !== false
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition shadow-xs ${selectedJob.is_active !== false
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                             : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                        }`}
+                          }`}
                       >
                         {togglingJobId === selectedJob.id ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -806,7 +797,7 @@ export default function PerekrutDashboard() {
                   </div>
 
                   {loadingApplicants ? (
-                     <div className="p-12 text-center animate-fade-in">
+                    <div className="p-12 text-center animate-fade-in">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
                       <span className="text-xs text-slate-500">Memuat peringkat kandidat...</span>
                     </div>
@@ -838,9 +829,8 @@ export default function PerekrutDashboard() {
                             return (
                               <tr
                                 key={app.id}
-                                className={`transition hover:bg-slate-50/80 ${
-                                  index === 0 ? 'bg-amber-50/40' : ''
-                                }`}
+                                className={`transition hover:bg-slate-50/80 ${index === 0 ? 'bg-amber-50/40' : ''
+                                  }`}
                               >
                                 <td className="px-4 py-3 font-bold">
                                   {index === 0 && <span className="text-amber-500 mr-1">🥇</span>}
@@ -855,13 +845,12 @@ export default function PerekrutDashboard() {
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <span
-                                    className={`inline-flex items-center justify-center min-w-[38px] px-2.5 py-1 rounded-full text-xs font-bold ${
-                                      app.score >= 80
+                                    className={`inline-flex items-center justify-center min-w-[38px] px-2.5 py-1 rounded-full text-xs font-bold ${app.score >= 80
                                         ? 'bg-emerald-100 text-emerald-800'
                                         : app.score >= 60
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : 'bg-amber-100 text-amber-800'
-                                    }`}
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : 'bg-amber-100 text-amber-800'
+                                      }`}
                                   >
                                     {app.score}
                                   </span>
@@ -870,15 +859,14 @@ export default function PerekrutDashboard() {
                                   <select
                                     value={currentStatus}
                                     onChange={(e) => handleUpdateStatus(app.id, e.target.value)}
-                                    className={`text-xs font-semibold px-2.5 py-1 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 transition cursor-pointer ${
-                                      currentStatus === 'Shortlisted'
+                                    className={`text-xs font-semibold px-2.5 py-1 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 transition cursor-pointer ${currentStatus === 'Shortlisted'
                                         ? 'bg-blue-50 text-blue-700 border-blue-200'
                                         : currentStatus === 'Dihubungi'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                                        : currentStatus === 'Ditolak'
-                                        ? 'bg-red-50 text-red-700 border-red-200'
-                                        : 'bg-slate-100 text-slate-700 border-slate-200'
-                                    }`}
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                          : currentStatus === 'Ditolak'
+                                            ? 'bg-red-50 text-red-700 border-red-200'
+                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                      }`}
                                   >
                                     <option value="Menunggu Review">Menunggu Review</option>
                                     <option value="Shortlisted">Shortlisted</option>
@@ -1085,7 +1073,7 @@ export default function PerekrutDashboard() {
                   {creating ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>AI Sedang Merancang Soal...</span>
+                      <span>Merancang Soal...</span>
                     </>
                   ) : (
                     <>
