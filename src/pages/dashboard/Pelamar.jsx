@@ -193,32 +193,32 @@ export default function PelamarDashboard() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
-        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in-up">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in-up">
+          <div className="space-y-1.5">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
               Halo, {profile?.full_name || user?.user_metadata?.full_name || 'Pelamar'}
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 leading-relaxed max-w-xl">
               Buktikan kompetensi Anda tanpa bias CV. Ikuti tes studi kasus dan raih kesempatan kerja.
             </p>
 
             {(profile?.domisili || profile?.pendidikan || profile?.phone) && (
-              <div className="flex items-center gap-2 mt-3 flex-wrap text-xs text-slate-600">
+              <div className="flex items-center gap-2 pt-2 flex-wrap text-xs text-slate-600">
                 {profile?.domisili && (
-                  <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-medium">
+                    <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                     {profile.domisili}
                   </span>
                 )}
                 {profile?.pendidikan && (
-                  <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                    <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-medium">
+                    <GraduationCap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     {profile.pendidikan}
                   </span>
                 )}
                 {profile?.phone && (
-                  <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                    <Phone className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-medium">
+                    <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     {profile.phone}
                   </span>
                 )}
@@ -226,22 +226,31 @@ export default function PelamarDashboard() {
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center gap-3 shrink-0 pt-2 sm:pt-0">
             <Button
               variant={activeTab === 'browse' ? 'default' : 'outline'}
               onClick={() => setActiveTab('browse')}
-              className="gap-2"
+              className="gap-2 w-full sm:w-auto justify-center h-11 px-4 sm:px-5 font-semibold text-xs sm:text-sm shadow-sm transition-all"
             >
-              <Briefcase className="w-4 h-4" />
-              Jelajahi Lowongan
+              <Briefcase className="w-4 h-4 shrink-0" />
+              <span>Jelajahi Lowongan</span>
             </Button>
             <Button
               variant={activeTab === 'applications' ? 'default' : 'outline'}
               onClick={() => setActiveTab('applications')}
-              className="gap-2"
+              className="gap-2 w-full sm:w-auto justify-center h-11 px-4 sm:px-5 font-semibold text-xs sm:text-sm shadow-sm transition-all"
             >
-              <Award className="w-4 h-4" />
-              Lamaran Saya ({totalApplied})
+              <Award className="w-4 h-4 shrink-0" />
+              <span>Lamaran Saya</span>
+              <span
+                className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold leading-none ${
+                  activeTab === 'applications'
+                    ? 'bg-blue-700 text-white'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                }`}
+              >
+                {totalApplied}
+              </span>
             </Button>
           </div>
         </div>
