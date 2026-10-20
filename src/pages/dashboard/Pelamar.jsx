@@ -20,8 +20,20 @@ import {
   Loader2,
   Search,
   HelpCircle,
-  FileText
+  FileText,
+  MapPin,
+  GraduationCap,
+  Phone,
 } from 'lucide-react'
+import { SkeletonCard, SkeletonStatCard, SkeletonTable } from '../../components/ui/skeleton'
+
+// Category Icon Mapping
+const CATEGORY_ICONS = {
+  admin: '📋', kasir: '💳', desainer: '🎨', teknisi: '🔧',
+  marketing: '📢', gudang: '📦', customer_service: '🎧',
+  keuangan: '💰', driver: '🚗', produksi: '🏭',
+  it: '💻', fnb: '☕', cleaning: '🧹', security: '🛡️', sales: '📊',
+}
 
 export default function PelamarDashboard() {
   const { user, profile } = useAuth()
@@ -55,7 +67,8 @@ export default function PelamarDashboard() {
           created_at,
           perekrut:perekrut_id (
             company_name,
-            full_name
+            full_name,
+            logo_url
           )
         `)
         .eq('is_active', true)
@@ -64,7 +77,8 @@ export default function PelamarDashboard() {
       if (jobsError) throw jobsError
 
       // 2. Ambil riwayat aplikasi milik pelamar ini
-      const { data: appsData, error: appsError } = await supabase
+      let appsData = []
+      const { data: appsRes, error: appsError } = await supabase
         .from('applications')
         .select(`
           id,
@@ -84,7 +98,35 @@ export default function PelamarDashboard() {
         .eq('pelamar_id', user.id)
         .order('submitted_at', { ascending: false })
 
-      if (appsError) throw appsError
+      if (appsError) {
+        console.warn('Fallback applications query in Pelamar.jsx:', appsError.message)
+        const fallbackApps = await supabase
+          .from('applications')
+          .select(`
+            id,
+            job_id,
+            score,
+            submitted_at,
+            job:job_id (
+              id,
+              title,
+              category,
+              perekrut:perekrut_id (
+                company_name
+              )
+            )
+          `)
+          .eq('pelamar_id', user.id)
+          .order('submitted_at', { ascending: false })
+
+        if (fallbackApps.error) throw fallbackApps.error
+        appsData = (fallbackApps.data || []).map((app) => ({
+          ...app,
+          status: app.status || 'Menunggu Review',
+        }))
+      } else {
+        appsData = appsRes || []
+      }
 
       setJobs(jobsData || [])
       setApplications(appsData || [])
@@ -98,6 +140,32 @@ export default function PelamarDashboard() {
 
   useEffect(() => {
     fetchData()
+
+    // 1. Auto-refresh saat tab window difokuskan kembali (misal setelah pindah tab perekrut)
+    const onFocus = () => fetchData()
+    window.addEventListener('focus', onFocus)
+
+    // 2. Real-time subscription Supabase untuk perubahan status lamaran
+    const channel = supabase
+      .channel('public:applications')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'applications',
+          filter: user ? `pelamar_id=eq.${user.id}` : undefined,
+        },
+        () => {
+          fetchData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      supabase.removeChannel(channel)
+    }
   }, [user])
 
   // Set lowongan yang sudah pernah dikerjakan pelamar
@@ -125,7 +193,7 @@ export default function PelamarDashboard() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
-        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in-up">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold mb-2">
               <User className="w-3.5 h-3.5" />
@@ -135,8 +203,31 @@ export default function PelamarDashboard() {
               Halo, {profile?.full_name || 'Pelamar'} 👋
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Buktikan kompetensi Anda tanpa bias CV. Ikuti tes studi kasus AI 5 menit dan raih kesempatan kerja di UMKM.
+              Buktikan kompetensi Anda tanpa bias CV. Ikuti tes studi kasus dan raih kesempatan kerja.
             </p>
+
+            {(profile?.domisili || profile?.pendidikan || profile?.phone) && (
+              <div className="flex items-center gap-2 mt-3 flex-wrap text-xs text-slate-600">
+                {profile?.domisili && (
+                  <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                    {profile.domisili}
+                  </span>
+                )}
+                {profile?.pendidikan && (
+                  <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                    <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
+                    {profile.pendidikan}
+                  </span>
+                )}
+                {profile?.phone && (
+                  <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                    <Phone className="w-3.5 h-3.5 text-slate-500" />
+                    {profile.phone}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -160,8 +251,8 @@ export default function PelamarDashboard() {
         </div>
 
         {/* Quick Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 animate-fade-in-up stagger-1">
+          <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Lowongan Tersedia
@@ -174,7 +265,7 @@ export default function PelamarDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Quiz Diselesaikan
@@ -187,7 +278,7 @@ export default function PelamarDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Rata-Rata Skor Tes
@@ -244,9 +335,12 @@ export default function PelamarDashboard() {
             </div>
 
             {loading ? (
-              <div className="p-16 text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
-                <span className="text-sm text-slate-500">Memuat lowongan pekerjaan...</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className={`animate-fade-in-up stagger-${i + 1}`}>
+                    <SkeletonCard />
+                  </div>
+                ))}
               </div>
             ) : filteredJobs.length === 0 ? (
               <Card className="text-center p-12 bg-white border-dashed">
@@ -258,18 +352,20 @@ export default function PelamarDashboard() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredJobs.map((job) => {
+                {filteredJobs.map((job, index) => {
                   const isApplied = appliedJobIds.has(job.id)
                   const myApp = applications.find((a) => a.job_id === job.id)
 
                   return (
                     <Card
                       key={job.id}
-                      className="flex flex-col justify-between hover:shadow-md transition border-slate-200"
+                      className="flex flex-col justify-between hover:shadow-md transition border-slate-200 card-hover animate-fade-in-up"
+                      style={{ animationDelay: `${index * 0.05}s` }}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <Badge variant="default" className="capitalize text-[11px]">
+                          <Badge variant="default" className="capitalize text-[11px] gap-1">
+                            <span>{CATEGORY_ICONS[job.category] || '📌'}</span>
                             {job.category}
                           </Badge>
                           <span className="text-[11px] text-slate-400 flex items-center gap-1">
@@ -283,9 +379,17 @@ export default function PelamarDashboard() {
                         <CardTitle className="text-lg font-bold text-slate-900 leading-snug line-clamp-1">
                           {job.title}
                         </CardTitle>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium pt-1">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{job.perekrut?.company_name || 'UMKM Lokal'}</span>
+                        <div className="flex items-center gap-2 text-xs text-slate-600 font-medium pt-1.5">
+                          {job.perekrut?.logo_url ? (
+                            <img
+                              src={job.perekrut.logo_url}
+                              alt={job.perekrut.company_name}
+                              className="w-5 h-5 rounded-md object-contain border border-slate-200 shrink-0"
+                            />
+                          ) : (
+                            <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                          )}
+                          <span className="truncate">{job.perekrut?.company_name || 'UMKM Lokal'}</span>
                         </div>
                       </CardHeader>
 
@@ -315,7 +419,7 @@ export default function PelamarDashboard() {
                                 Detail
                               </Button>
                               <Link to={`/quiz/${job.id}`}>
-                                <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-xs">
+                                <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-xs btn-press">
                                   <Sparkles className="w-3.5 h-3.5" />
                                   Mulai Quiz
                                 </Button>
@@ -341,9 +445,8 @@ export default function PelamarDashboard() {
             </h2>
 
             {loading ? (
-              <div className="p-16 text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
-                <span className="text-sm text-slate-500">Memuat riwayat lamaran...</span>
+              <div className="space-y-4 animate-fade-in">
+                <SkeletonTable rows={3} />
               </div>
             ) : applications.length === 0 ? (
               <Card className="text-center p-12 bg-white border-dashed">
@@ -357,7 +460,7 @@ export default function PelamarDashboard() {
                 </Button>
               </Card>
             ) : (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-fade-in-up">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase border-b border-slate-100">
@@ -427,15 +530,15 @@ export default function PelamarDashboard() {
                             </td>
                             <td className="px-6 py-4">
                               <span
-                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                className={`inline-flex items-center justify-center min-w-[38px] px-2.5 py-1 rounded-full text-xs font-bold ${
                                   app.score >= 80
                                     ? 'bg-emerald-100 text-emerald-800'
                                     : app.score >= 60
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-amber-100 text-amber-800'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-amber-100 text-amber-800'
                                 }`}
                               >
-                                {app.score} / 100
+                                {app.score}
                               </span>
                             </td>
                             <td className="px-6 py-4">

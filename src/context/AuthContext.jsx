@@ -94,6 +94,7 @@ export function AuthProvider({ children }) {
     role,
     fullName,
     companyName,
+    logoUrl,
     phone,
     domisili,
     pendidikan,
@@ -107,6 +108,7 @@ export function AuthProvider({ children }) {
           full_name: fullName,
           role,
           company_name: role === 'perekrut' ? companyName : null,
+          logo_url: role === 'perekrut' ? logoUrl : null,
           phone: role === 'pelamar' ? phone : null,
           domisili: role === 'pelamar' ? domisili : null,
           pendidikan: role === 'pelamar' ? pendidikan : null,
@@ -118,23 +120,64 @@ export function AuthProvider({ children }) {
 
     // Insert to profiles table if user is created
     if (data.user) {
-      const { error: profileError } = await supabase.from('profiles').upsert({
+      const fullProfileData = {
         id: data.user.id,
         role,
         full_name: fullName,
         company_name: role === 'perekrut' ? companyName : null,
+        logo_url: role === 'perekrut' ? logoUrl : null,
         phone: role === 'pelamar' ? phone : null,
         domisili: role === 'pelamar' ? domisili : null,
         pendidikan: role === 'pelamar' ? pendidikan : null,
         ringkasan: role === 'pelamar' ? ringkasan : null,
-      })
-      if (profileError) {
-        console.error('Error creating profile entry:', profileError.message)
       }
+
+      let { error: profileError } = await supabase.from('profiles').upsert(fullProfileData)
+      
+      // Jika error karena kolom baru belum ditambahkan di Supabase, fallback ke field dasar
+      if (profileError) {
+        console.warn('Upsert full profile failed, trying basic fields fallback:', profileError.message)
+        const basicProfileData = {
+          id: data.user.id,
+          role,
+          full_name: fullName,
+          company_name: role === 'perekrut' ? companyName : null,
+        }
+        const { error: basicError } = await supabase.from('profiles').upsert(basicProfileData)
+        if (basicError) {
+          console.error('Error creating basic profile entry:', basicError.message)
+        }
+      }
+
       const userProfile = await fetchProfile(data.user.id, data.user.user_metadata)
       return { user: data.user, session: data.session, profile: userProfile }
     }
     return data
+  }
+
+  const updateProfile = async (updates) => {
+    if (!user) throw new Error('User belum login')
+
+    // 1. Update profiles table
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+
+    if (profileError) throw profileError
+
+    // 2. Sync to auth user_metadata so fallback metadata is always aligned
+    try {
+      await supabase.auth.updateUser({
+        data: updates,
+      })
+    } catch (e) {
+      console.warn('Could not sync user_metadata:', e)
+    }
+
+    // 3. Re-fetch fresh profile
+    const updated = await fetchProfile(user.id, updates)
+    return updated
   }
 
   const logout = async () => {
@@ -154,6 +197,7 @@ export function AuthProvider({ children }) {
         register,
         logout,
         fetchProfile,
+        updateProfile,
       }}
     >
       {children}

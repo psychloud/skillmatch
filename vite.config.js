@@ -10,6 +10,15 @@ export default defineConfig({
         target: 'https://ai.sumopod.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-sumopod/, '')
+      },
+      '/supabase-proxy': {
+        target: 'https://yqocqqrhkbhsvonsnecu.supabase.co',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/supabase-proxy/, ''),
+        headers: {
+          'Origin': 'https://yqocqqrhkbhsvonsnecu.supabase.co'
+        }
       }
     }
   }

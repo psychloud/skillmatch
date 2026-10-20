@@ -1,9 +1,12 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Link, Navigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { SkeletonCard } from '../components/ui/skeleton'
 import {
   Sparkles,
   ArrowRight,
@@ -17,62 +20,139 @@ import {
   Award,
   BarChart3,
   ChevronRight,
+  Briefcase,
+  MapPin,
+  Calendar,
+  Radio,
+  FileText,
 } from 'lucide-react'
 
+// Category Icon Mapping
+const CATEGORY_ICONS = {
+  admin: '📋', kasir: '💳', desainer: '🎨', teknisi: '🔧',
+  marketing: '📢', gudang: '📦', customer_service: '🎧',
+  keuangan: '💰', driver: '🚗', produksi: '🏭',
+  it: '💻', fnb: '☕', cleaning: '🧹', security: '🛡️', sales: '📊',
+}
+
+const CATEGORY_LABELS = {
+  admin: 'Admin & Kesekretariatan',
+  kasir: 'Kasir & Pembayaran',
+  desainer: 'Desainer Grafis',
+  teknisi: 'Teknisi & Maintenance',
+  marketing: 'Marketing & Media Sosial',
+  gudang: 'Gudang & Logistik',
+  customer_service: 'Customer Service',
+  keuangan: 'Keuangan & Akuntansi',
+  driver: 'Driver & Kurir',
+  produksi: 'Produksi & Manufaktur',
+  it: 'IT & Teknologi',
+  fnb: 'F&B & Barista',
+  cleaning: 'Cleaning Service',
+  security: 'Security',
+  sales: 'Sales & Agen',
+}
+
 export default function Landing() {
+  const { user, profile, loading } = useAuth()
+  const [liveJobs, setLiveJobs] = useState([])
+  const [loadingJobs, setLoadingJobs] = useState(true)
+
+  // Jika user sudah login, langsung alihkan ke dashboard masing-masing
+  if (!loading && user) {
+    const role = profile?.role || user.user_metadata?.role
+    if (role === 'perekrut') {
+      return <Navigate to="/dashboard/perekrut" replace />
+    }
+    return <Navigate to="/dashboard/pelamar" replace />
+  }
+
+  useEffect(() => {
+    async function fetchLiveJobs() {
+      try {
+        const { data, error } = await supabase
+          .from('jobs')
+          .select(`
+            id,
+            title,
+            category,
+            description,
+            created_at,
+            perekrut:perekrut_id (
+              company_name,
+              full_name,
+              logo_url
+            )
+          `)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(6)
+
+        if (!error && data) {
+          setLiveJobs(data)
+        }
+      } catch (err) {
+        console.error('Error fetching live jobs:', err)
+      } finally {
+        setLoadingJobs(false)
+      }
+    }
+
+    fetchLiveJobs()
+  }, [])
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden pt-16 pb-20 md:pt-24 md:pb-28 bg-gradient-to-b from-blue-50/70 via-white to-slate-50 border-b border-slate-200/60">
-        {/* Subtle decorative background circles */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-400/10 rounded-full blur-3xl pointer-events-none -z-0" />
+      <section className="relative overflow-hidden pt-12 pb-16 md:pt-16 md:pb-24 bg-gradient-to-b from-blue-50/60 via-white to-slate-50 border-b border-slate-200/60 animated-gradient-hero">
+        {/* Subtle decorative background glow */}
+        <div className="absolute top-1/3 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-400/10 rounded-full blur-3xl pointer-events-none -z-0" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <Badge variant="default" className="px-3.5 py-1.5 mb-6 text-xs sm:text-sm font-semibold gap-1.5">
-            <Sparkles className="w-4 h-4 text-blue-600" />
-            Solusi Nyata Mismatch Tenaga Kerja Indonesia 2045
-          </Badge>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-0 items-center">
+            {/* Column 1: Headline, Copy, CTA, Badges (On mobile: order-2, on desktop: order-1) */}
+            <div className="order-2 lg:order-1 lg:col-span-6 xl:col-span-6 text-left animate-fade-in-up relative z-20">
+              <h1 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[46px] font-extrabold text-slate-950 tracking-tight leading-[1.18]">
+                Rekrut Lebih Cepat, <br />
+                <span className="text-blue-700 font-extrabold sm:whitespace-nowrap">
+                  Screening Lebih Objektif
+                </span>
+              </h1>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight max-w-4xl mx-auto leading-[1.15]">
-            Verifikasi Skill Nyata, <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              Bukan Sekadar Tumpukan CV.
-            </span>
-          </h1>
+              <p className="mt-4 text-sm sm:text-base text-slate-700 max-w-lg leading-relaxed font-normal">
+                Platform rekrutmen untuk UMKM Indonesia. Posting lowongan, AI buatkan soal seleksinya, kandidat tersaring otomatis berdasarkan skor.
+              </p>
 
-          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            Menghubungkan pencari kerja muda dengan UMKM menengah di Indonesia. Perekrut pilih kategori posisi, AI otomatis generate quiz skill praktis, dan kandidat tersaring otomatis dari skor nyata.
-          </p>
+              {/* CTA Buttons */}
+              <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <Link to="/register?role=pelamar">
+                  <Button size="default" className="w-full sm:w-auto gap-2 bg-blue-600 hover:bg-blue-700 font-semibold shadow-md shadow-blue-500/25 btn-press px-5 py-5 text-xs sm:text-sm">
+                    Cari Kerja & Tes Skill
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
 
-          {/* CTA Buttons */}
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto sm:max-w-none">
-            <Link to="/register?role=pelamar" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto gap-2 bg-blue-600 hover:bg-blue-700 font-semibold shadow-lg shadow-blue-500/25">
-                Cari Kerja & Tes Skill
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+                <Link to="/register?role=perekrut">
+                  <Button size="default" variant="outline" className="w-full sm:w-auto gap-2 border-slate-300 font-semibold hover:border-blue-400 hover:text-blue-600 btn-press px-4 py-5 text-xs sm:text-sm bg-white/90 shadow-sm">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    Rekrut Sekarang (Perekrut)
+                  </Button>
+                </Link>
+              </div>
+            </div>
 
-            <Link to="/register?role=perekrut" className="w-full sm:w-auto">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2 border-slate-300 font-semibold hover:border-blue-400 hover:text-blue-600">
-                <Building2 className="w-4 h-4 text-blue-600" />
-                Rekrut Sekarang (Perekrut)
-              </Button>
-            </Link>
-          </div>
-
-          <div className="mt-8 flex items-center justify-center gap-6 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Tanpa biaya awal
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Soal AI praktis & kontekstual
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Hasil instan
-            </span>
+            {/* Column 2: 3D Hero Illustration (On mobile: order-1, on desktop: order-2) */}
+            <div className="order-1 lg:order-2 lg:col-span-6 xl:col-span-6 flex items-center justify-center lg:justify-start animate-fade-in-up stagger-1 relative z-10 lg:-ml-8 xl:-ml-12 pointer-events-none">
+              <div className="relative w-full flex justify-center lg:justify-start">
+                <img
+                  src="/hero_image.png"
+                  alt="SkillMatch Hero Illustration"
+                  className="w-full max-w-[420px] sm:max-w-[500px] lg:max-w-[760px] xl:max-w-[820px] h-auto object-contain drop-shadow-xl select-none pointer-events-none transform lg:scale-110 lg:origin-left"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -82,15 +162,15 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-xl mx-auto mb-10">
             <h2 className="text-xs uppercase tracking-widest font-bold text-blue-600 mb-1">
-              Fakta & Urgensi Nasional
+              Tahukah Kamu ?
             </h2>
             <p className="text-xl sm:text-2xl font-bold text-slate-900">
-              Jurang Pemisah Antara Lulusan Muda & UMKM
+              Terdapat Gap Antara Lulusan Muda & UMKM
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
-            <Card className="border-blue-100 bg-gradient-to-br from-white to-blue-50/30">
+            <Card className="border-blue-100 bg-gradient-to-br from-white to-blue-50/30 card-hover animate-fade-in-up stagger-1">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between text-blue-600 mb-2">
                   <Badge variant="default" className="bg-blue-100 text-blue-800">BPS Feb 2024</Badge>
@@ -100,17 +180,20 @@ export default function Landing() {
                   7,47 Juta
                 </CardTitle>
                 <div className="text-base font-bold text-slate-800 pt-1">
-                  Tingkat Pengangguran Terbuka
+                  Total Penganggur Terbuka
+                </div>
+                <div className="text-xs text-blue-700 font-semibold">
+                  TPT Nasional: 4,82%
                 </div>
               </CardHeader>
               <CardContent>
                 <CardDescription className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                  1 dari 3 fresh graduate menganggur &gt;6 bulan akibat ketiadaan bukti skill nyata di luar ijazah formal.
+                  Didominasi lulusan muda &amp; fresh graduate (youth unemployment) akibat kesenjangan keterampilan (skill gap) dengan kebutuhan nyata dunia usaha.
                 </CardDescription>
               </CardContent>
             </Card>
 
-            <Card className="border-emerald-100 bg-gradient-to-br from-white to-emerald-50/30">
+            <Card className="border-emerald-100 bg-gradient-to-br from-white to-emerald-50/30 card-hover animate-fade-in-up stagger-2">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between text-emerald-600 mb-2">
                   <Badge variant="success">Kemenkop 2023</Badge>
@@ -130,7 +213,7 @@ export default function Landing() {
               </CardContent>
             </Card>
 
-            <Card className="border-purple-100 bg-gradient-to-br from-white to-purple-50/30">
+            <Card className="border-purple-100 bg-gradient-to-br from-white to-purple-50/30 card-hover animate-fade-in-up stagger-3">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between text-purple-600 mb-2">
                   <Badge variant="secondary" className="bg-purple-100 text-purple-800">BPS Ags 2023</Badge>
@@ -153,188 +236,170 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section className="py-20 bg-slate-50">
+      {/* Lowongan Aktif Terbaru (Live Job Postings) */}
+      <section className="py-20 bg-slate-50 border-t border-slate-200/80" id="lowongan">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <Badge variant="default" className="mb-3">Alur Kerja Platform</Badge>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
-              Cara Kerja SkillMatch
-            </h2>
-            <p className="mt-3 text-slate-600 text-sm sm:text-base">
-              Proses screening otomatis 3 langkah tanpa repot screening ratusan lembar CV.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Lowongan Kerja Terbaru Sedang Dibuka
+              </h2>
+              <p className="mt-2 text-slate-600 text-xs sm:text-sm">
+                Diposting langsung oleh pemilik usaha & HRD UMKM. Buktikan kemampuanmu melalui kuis skenario kerja singkat.
+              </p>
+            </div>
+
+            <Link to="/register?role=pelamar" className="shrink-0">
+              <Button variant="outline" className="gap-2 border-slate-300 font-semibold hover:border-blue-500 hover:text-blue-600">
+                Lihat Semua Lowongan
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </Link>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            {/* Perekrut Flow */}
-            <Card className="border-slate-200/90 shadow-sm relative overflow-hidden">
-              <div className="h-1.5 w-full bg-blue-600 top-0 left-0 absolute" />
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl">3 Langkah untuk Perekrut UMKM</CardTitle>
-                    <CardDescription>Buka lowongan dan dapatkan kandidat siap kerja</CardDescription>
-                  </div>
+          {/* Job Cards Grid */}
+          {loadingJobs ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="animate-fade-in-up">
+                  <SkeletonCard />
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-6 pt-2">
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center shrink-0 border border-blue-200">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Pilih Kategori Posisi Pekerjaan</h4>
-                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Pilih dari kategori siap pakai (Kasir, Admin, Desainer, Teknisi, dll) dan tulis deskripsi singkat kebutuhan usaha Anda.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center shrink-0 border border-blue-200">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">AI Otomatis Generate 5 Soal Kasus</h4>
-                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Engine AI SumoPod langsung menyusun 5 studi kasus praktis pilihan ganda yang relevan dengan tantangan UMKM harian.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center shrink-0 border border-blue-200">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Lihat Ranking Kandidat Berdasarkan Skor</h4>
-                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Pelamar langsung diranking otomatis berdasarkan skor tes objektif (0-100). Rekrut yang terbukti kompeten!
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <Link to="/register?role=perekrut">
-                    <Button variant="outline" className="w-full gap-2 border-blue-200 text-blue-600 hover:bg-blue-50">
-                      Mulai Buka Lowongan Gratis
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
+              ))}
+            </div>
+          ) : liveJobs.length === 0 ? (
+            <Card className="text-center p-12 bg-white border-dashed">
+              <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-base font-semibold text-slate-800">Belum Ada Lowongan Aktif</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Pemilik usaha UMKM dapat mulai memposting lowongan sekarang dan sistem AI akan membuatkan soal tesnya.
+              </p>
+              <div className="mt-5">
+                <Link to="/register?role=perekrut">
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                    Buka Lowongan Sekarang
+                  </Button>
+                </Link>
+              </div>
             </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {liveJobs.map((job, index) => {
+                const categoryIcon = CATEGORY_ICONS[job.category] || '💼'
+                const categoryLabel = CATEGORY_LABELS[job.category] || job.category
 
-            {/* Pelamar Flow */}
-            <Card className="border-slate-200/90 shadow-sm relative overflow-hidden">
-              <div className="h-1.5 w-full bg-emerald-600 top-0 left-0 absolute" />
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl">3 Langkah untuk Pelamar Kerja</CardTitle>
-                    <CardDescription>Buktikan kompetensi Anda tanpa bias latar belakang</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6 pt-2">
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 font-bold text-sm flex items-center justify-center shrink-0 border border-emerald-200">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Cari Lowongan UMKM yang Cocok</h4>
-                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Jelajahi daftar pekerjaan aktif dari UMKM terpercaya tanpa syarat formal yang berbelit-belit.
-                    </p>
-                  </div>
-                </div>
+                return (
+                  <Card
+                    key={job.id}
+                    className="flex flex-col justify-between hover:shadow-lg transition-all duration-300 border-slate-200/90 hover:border-blue-300 bg-white group card-hover animate-fade-in-up"
+                    style={{ animationDelay: `${index * 80}ms` }}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        {job.perekrut?.logo_url ? (
+                          <div className="w-11 h-11 rounded-xl bg-white border border-slate-200/80 p-1 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
+                            <img
+                              src={job.perekrut.logo_url}
+                              alt={job.perekrut?.company_name || 'Logo UMKM'}
+                              className="w-full h-full object-contain rounded-lg"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-2xl p-2 rounded-xl bg-slate-50 border border-slate-100 group-hover:scale-110 transition-transform">
+                            {categoryIcon}
+                          </span>
+                        )}
+                        <Badge variant="secondary" className="text-[11px] font-medium bg-slate-100 text-slate-700">
+                          {categoryLabel}
+                        </Badge>
+                      </div>
 
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 font-bold text-sm flex items-center justify-center shrink-0 border border-emerald-200">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Kerjakan Quiz Praktis 5 Menit</h4>
-                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Jawab 5 soal interaktif berbasis skenario kerja nyata. Tunjukkan bagaimana Anda menyelesaikan masalah di lapangan.
-                    </p>
-                  </div>
-                </div>
+                      <CardTitle className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
+                        {job.title}
+                      </CardTitle>
 
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 font-bold text-sm flex items-center justify-center shrink-0 border border-emerald-200">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Skor Masuk ke Radar Pemilik Usaha</h4>
-                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Hasil tes Anda langsung tersimpan dan menjadi bukti keahlian yang dilihat oleh perekrut untuk dipanggil wawancara.
-                    </p>
-                  </div>
-                </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium pt-1">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">
+                          {job.perekrut?.company_name || 'UMKM Indonesia'}
+                        </span>
+                      </div>
+                    </CardHeader>
 
-                <div className="pt-2">
-                  <Link to="/register?role=pelamar">
-                    <Button variant="outline" className="w-full gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                      Mulai Kerjakan Tes Sekarang
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-slate-600 line-clamp-4 whitespace-pre-line leading-relaxed mb-4">
+                        {job.description || 'Tidak ada deskripsi khusus untuk lowongan ini.'}
+                      </p>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                        <span className="flex items-center gap-1 text-[11px]">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(job.created_at).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                          })}
+                        </span>
+                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                          Quiz AI Siap
+                        </span>
+                      </div>
+
+                      <div className="mt-4">
+                        <Link to={`/quiz/${job.id}`}>
+                          <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs py-2 shadow-sm btn-press">
+                            Mulai Tes Skill
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Value Proposition Grid */}
-      <section className="py-16 bg-white border-t border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60">
-              <FileX className="w-7 h-7 text-blue-600 mb-3" />
-              <h4 className="font-bold text-slate-900 text-sm">Skill-First Screening</h4>
-              <p className="text-xs text-slate-500 mt-1">Kualifikasi ditentukan oleh kemampuan nyata, bukan format CV atau gelar.</p>
-            </div>
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60">
-              <BrainCircuit className="w-7 h-7 text-indigo-600 mb-3" />
-              <h4 className="font-bold text-slate-900 text-sm">AI-Powered Questioning</h4>
-              <p className="text-xs text-slate-500 mt-1">Soal disesuaikan dengan konteks UMKM lokal di Indonesia secara dinamis.</p>
-            </div>
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60">
-              <Target className="w-7 h-7 text-emerald-600 mb-3" />
-              <h4 className="font-bold text-slate-900 text-sm">Zero Friction HR</h4>
-              <p className="text-xs text-slate-500 mt-1">Pemilik UMKM tidak perlu membuang waktu berminggu-minggu memilah pelamar.</p>
-            </div>
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60">
-              <Award className="w-7 h-7 text-amber-600 mb-3" />
-              <h4 className="font-bold text-slate-900 text-sm">Transparan & Adil</h4>
-              <p className="text-xs text-slate-500 mt-1">Pelamar langsung mengetahui skor performanya secara instan setelah tes.</p>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-10 mt-auto border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-2 text-white font-bold text-base">
-            <span className="p-1.5 bg-blue-600 text-white rounded-lg inline-flex">
-              <Sparkles className="w-4 h-4" />
-            </span>
-            SkillMatch
+      {/* Clean & Aesthetic Footer */}
+      <footer className="bg-slate-950 text-slate-400 pt-12 pb-10 mt-auto border-t border-slate-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8 pb-10 border-b border-slate-900">
+            {/* Brand */}
+            <div className="space-y-3">
+              <Link to="/" className="inline-block hover:opacity-90 transition">
+                <img
+                  src="/Logo_SkillMatch.png"
+                  alt="SkillMatch Logo"
+                  className="h-11 w-auto object-contain brightness-105"
+                />
+              </Link>
+              <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
+                Platform rekrutmen berbasis evaluasi keterampilan nyata dan skenario praktis kerja untuk UMKM Indonesia.
+              </p>
+            </div>
+
+            {/* Quick Links & CTA */}
+            <div className="flex flex-wrap items-center gap-6 text-xs font-medium">
+              <a href="#masalah" className="hover:text-white transition">Tentang Kami</a>
+              <a href="#kategori" className="hover:text-white transition">Kategori Pekerjaan</a>
+              <Link to="/login" className="hover:text-white transition">Masuk</Link>
+              <Link
+                to="/register"
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition"
+              >
+                Mulai Sekarang
+              </Link>
+            </div>
           </div>
-          <p>© 2026 SkillMatch Indonesia. Menjawab mismatch tenaga kerja bonus demografi 2045.</p>
-          <div className="flex items-center gap-4">
-            <Link to="/login" className="hover:text-white transition">Masuk</Link>
-            <Link to="/register" className="hover:text-white transition">Daftar</Link>
+
+          {/* Bottom Bar */}
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+            <p>© 2026 SkillMatch Indonesia. Hak cipta dilindungi.</p>
+            <div className="flex items-center gap-6">
+              <span className="hover:text-slate-300 cursor-pointer transition">Kebijakan Privasi</span>
+              <span className="hover:text-slate-300 cursor-pointer transition">Syarat & Ketentuan</span>
+            </div>
           </div>
         </div>
       </footer>

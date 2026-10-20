@@ -3,7 +3,7 @@ import { Navbar } from '../../components/Navbar'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { supabase } from '../../lib/supabase'
-import { generateQuiz } from '../../lib/ai'
+import { generateQuiz, formatJobDescription } from '../../lib/ai'
 import { Button } from '../../components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
@@ -27,7 +27,20 @@ import {
   GraduationCap,
   CheckCircle2,
   XCircle,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  AlertTriangle,
 } from 'lucide-react'
+import { SkeletonJobRow, SkeletonStatCard, SkeletonTable } from '../../components/ui/skeleton'
+
+// Category Icon Mapping
+const CATEGORY_ICONS = {
+  admin: '📋', kasir: '💳', desainer: '🎨', teknisi: '🔧',
+  marketing: '📢', gudang: '📦', customer_service: '🎧',
+  keuangan: '💰', driver: '🚗', produksi: '🏭',
+  it: '💻', fnb: '☕', cleaning: '🧹', security: '🛡️', sales: '📊',
+}
 
 const JOB_CATEGORIES = [
   { value: 'admin', label: 'Admin & Kesekretariatan' },
@@ -60,6 +73,11 @@ export default function PerekrutDashboard() {
   const [loadingApplicants, setLoadingApplicants] = useState(false)
   const [activeApplicant, setActiveApplicant] = useState(null)
 
+  // State toggle & delete
+  const [jobToDelete, setJobToDelete] = useState(null)
+  const [deletingJob, setDeletingJob] = useState(false)
+  const [togglingJobId, setTogglingJobId] = useState(null)
+
   // Modal / Form state
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -79,6 +97,7 @@ export default function PerekrutDashboard() {
           title,
           category,
           description,
+          is_active,
           created_at,
           applications (
             id,
@@ -97,6 +116,7 @@ export default function PerekrutDashboard() {
         const avg = count > 0 ? Math.round(apps.reduce((sum, a) => sum + (a.score || 0), 0) / count) : 0
         return {
           ...job,
+          is_active: job.is_active !== false,
           applicantCount: count,
           averageScore: avg,
         }
@@ -107,12 +127,103 @@ export default function PerekrutDashboard() {
       // Auto-select job pertama jika belum ada yang dipilih
       if (formatted.length > 0 && !selectedJob) {
         selectJob(formatted[0])
+      } else if (selectedJob) {
+        const matched = formatted.find((j) => j.id === selectedJob.id)
+        if (matched) {
+          setSelectedJob((prev) => ({ ...prev, ...matched }))
+        }
       }
     } catch (err) {
       console.error('Error fetching jobs:', err)
       toast('Gagal memuat daftar lowongan', 'error')
     } finally {
       setLoadingJobs(false)
+    }
+  }
+
+  // Toggle status aktif/nonaktif lowongan
+  const toggleJobStatus = async (job, e) => {
+    if (e) e.stopPropagation()
+    const newStatus = !(job.is_active !== false)
+    setTogglingJobId(job.id)
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({ is_active: newStatus })
+        .eq('id', job.id)
+
+      if (error) throw error
+
+      setJobs((prev) =>
+        prev.map((j) => (j.id === job.id ? { ...j, is_active: newStatus } : j))
+      )
+      if (selectedJob?.id === job.id) {
+        setSelectedJob((prev) => ({ ...prev, is_active: newStatus }))
+      }
+      toast(
+        newStatus
+          ? `Lowongan "${job.title}" diaktifkan (siap dilamar)`
+          : `Lowongan "${job.title}" dinonaktifkan`,
+        'success'
+      )
+    } catch (err) {
+      console.error('Error toggling job status:', err)
+      toast('Gagal mengubah status lowongan', 'error')
+    } finally {
+      setTogglingJobId(null)
+    }
+  }
+
+  // Hapus lowongan & relasi aplikasi dan pertanyaan
+  const handleDeleteJob = async () => {
+    if (!jobToDelete) return
+    setDeletingJob(true)
+    try {
+      // 1. Hapus lamaran yang terkait (mencegah foreign key constraint error jika cascade belum aktif)
+      const { error: appErr } = await supabase
+        .from('applications')
+        .delete()
+        .eq('job_id', jobToDelete.id)
+
+      if (appErr) console.warn('Note deleting applications:', appErr.message)
+
+      // 2. Hapus pertanyaan kuis yang terkait
+      const { error: qErr } = await supabase
+        .from('questions')
+        .delete()
+        .eq('job_id', jobToDelete.id)
+
+      if (qErr) console.warn('Note deleting questions:', qErr.message)
+
+      // 3. Hapus data lowongan
+      const { error: jobErr } = await supabase
+        .from('jobs')
+        .delete()
+        .eq('id', jobToDelete.id)
+
+      if (jobErr) throw jobErr
+
+      toast(`Lowongan "${jobToDelete.title}" berhasil dihapus`, 'success')
+
+      const remainingJobs = jobs.filter((j) => j.id !== jobToDelete.id)
+      setJobs(remainingJobs)
+
+      if (selectedJob?.id === jobToDelete.id) {
+        if (remainingJobs.length > 0) {
+          selectJob(remainingJobs[0])
+        } else {
+          setSelectedJob(null)
+          setApplicants([])
+          setJobQuestions([])
+        }
+      }
+
+      setJobToDelete(null)
+    } catch (err) {
+      console.error('Error deleting job:', err)
+      toast(`Gagal menghapus lowongan: ${err.message || 'Error server'}`, 'error')
+    } finally {
+      setDeletingJob(false)
     }
   }
 
@@ -125,8 +236,9 @@ export default function PerekrutDashboard() {
     setSelectedJob(job)
     setLoadingApplicants(true)
     try {
-      // 1. Ambil applications beserta profil pelamar
-      const { data: appsData, error: appsError } = await supabase
+      // 1. Ambil applications beserta profil pelamar (dengan fallback jika kolom baru belum dimigrasi di SQL)
+      let appsData = null
+      let { data, error } = await supabase
         .from('applications')
         .select(`
           id,
@@ -146,8 +258,34 @@ export default function PerekrutDashboard() {
         .eq('job_id', job.id)
         .order('score', { ascending: false })
 
-      if (appsError) throw appsError
-      setApplicants(appsData || [])
+      if (error) {
+        // Fallback jika kolom phone/domisili/pendidikan/status belum ada di DB
+        console.warn('Fallback query applicants due to missing columns:', error.message)
+        const fallbackRes = await supabase
+          .from('applications')
+          .select(`
+            id,
+            score,
+            answers,
+            submitted_at,
+            pelamar:pelamar_id (
+              id,
+              full_name
+            )
+          `)
+          .eq('job_id', job.id)
+          .order('score', { ascending: false })
+
+        if (fallbackRes.error) throw fallbackRes.error
+        appsData = (fallbackRes.data || []).map((app) => ({
+          ...app,
+          status: app.status || 'Menunggu Review',
+        }))
+      } else {
+        appsData = data || []
+      }
+
+      setApplicants(appsData)
 
       // 2. Ambil soal yang digenerate AI untuk lowongan ini
       const { data: qData, error: qError } = await supabase
@@ -200,11 +338,15 @@ export default function PerekrutDashboard() {
     }
 
     setCreating(true)
-    toast('Sedang meminta AI merancang 5 soal tes praktis...', 'info', 3000)
+    toast('Sedang merancang soal tes & merapikan deskripsi dengan AI...', 'info', 3000)
 
     try {
-      // 1. Generate soal AI via SumoPod API
-      const questions = await generateQuiz(category, jobTitle)
+      // 1. Call generateQuiz dan formatJobDescription secara paralel via Promise.all
+      const [questions, formattedDesc] = await Promise.all([
+        generateQuiz(category, jobTitle),
+        formatJobDescription(description, jobTitle, category)
+      ])
+
       if (!questions || questions.length === 0) {
         throw new Error('Gagal menghasilkan soal dari AI')
       }
@@ -220,14 +362,14 @@ export default function PerekrutDashboard() {
         console.warn('Upsert profile notice:', profileCheckError)
       }
 
-      // 3. Simpan Job ke database Supabase
+      // 3. Simpan Job ke database Supabase dengan deskripsi yang sudah diformat AI
       const { data: newJob, error: jobError } = await supabase
         .from('jobs')
         .insert({
           perekrut_id: user.id,
           title: jobTitle,
           category,
-          description: description || null,
+          description: formattedDesc || description || null,
           is_active: true,
         })
         .select()
@@ -270,6 +412,7 @@ export default function PerekrutDashboard() {
 
   // Ringkasan metrik statistik
   const totalJobs = jobs.length
+  const activeJobsCount = jobs.filter((j) => j.is_active !== false).length
   const totalApplicants = jobs.reduce((sum, j) => sum + (j.applicantCount || 0), 0)
   const overallAvg =
     totalApplicants > 0
@@ -284,24 +427,32 @@ export default function PerekrutDashboard() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
-        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in-up">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold mb-2">
-              <Building2 className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold mb-2">
+              {profile?.logo_url ? (
+                <img
+                  src={profile.logo_url}
+                  alt={profile.company_name}
+                  className="w-4 h-4 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <Building2 className="w-3.5 h-3.5" />
+              )}
               {profile?.company_name || 'Dashboard Perekrut UMKM'}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
               Panel Rekrutmen & Verifikasi AI
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Buat lowongan dengan 1 klik. AI SumoPod otomatis menyusun 5 tes studi kasus untuk menyaring kandidat terbaik.
+              Buat lowongan dengan prompt singkat. Sistem otomatis menyusun 5 tes studi kasus untuk menyaring kandidat terbaik.
             </p>
           </div>
 
           <Button
             onClick={() => setShowCreateModal(true)}
             size="lg"
-            className="gap-2 shrink-0 self-start sm:self-center shadow-lg shadow-blue-500/20"
+            className="gap-2 shrink-0 self-start sm:self-center shadow-lg shadow-blue-500/20 btn-press"
           >
             <Plus className="w-5 h-5" />
             Buka Lowongan Baru
@@ -309,8 +460,8 @@ export default function PerekrutDashboard() {
         </div>
 
         {/* Quick Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 animate-fade-in-up stagger-1">
+          <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Total Lowongan
@@ -319,11 +470,13 @@ export default function PerekrutDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-slate-900">{totalJobs}</div>
-              <p className="text-xs text-slate-500 mt-1">Posisi kerja yang aktif dibuka</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeJobsCount} posisi aktif dibuka
+              </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Total Pelamar Masuk
@@ -336,7 +489,7 @@ export default function PerekrutDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Rata-rata Skor Tes
@@ -345,7 +498,7 @@ export default function PerekrutDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-slate-900">
-                {totalApplicants > 0 ? `${overallAvg}/100` : '-'}
+                {totalApplicants > 0 ? overallAvg : '-'}
               </div>
               <p className="text-xs text-slate-500 mt-1">Skor validasi kemampuan nyata</p>
             </CardContent>
@@ -364,12 +517,12 @@ export default function PerekrutDashboard() {
             </div>
 
             {loadingJobs ? (
-              <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
+              <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 animate-fade-in">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
                 <span className="text-xs text-slate-500">Memuat lowongan...</span>
               </div>
             ) : jobs.length === 0 ? (
-              <Card className="text-center p-8 bg-white border-dashed">
+              <Card className="text-center p-8 bg-white border-dashed animate-scale-in">
                 <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-sm font-semibold text-slate-800">Belum Ada Lowongan</h3>
                 <p className="text-xs text-slate-500 mt-1 mb-4">
@@ -383,37 +536,108 @@ export default function PerekrutDashboard() {
               <div className="space-y-3">
                 {jobs.map((job) => {
                   const isSelected = selectedJob?.id === job.id
+                  const isActive = job.is_active !== false
+
                   return (
                     <div
                       key={job.id}
                       onClick={() => selectJob(job)}
-                      className={`p-4 rounded-xl border transition cursor-pointer ${
+                      className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer card-hover animate-fade-in-up ${
                         isSelected
-                          ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-500/20 shadow-sm'
-                          : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                          ? isActive
+                            ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-500/20 shadow-sm'
+                            : 'bg-slate-100/90 border-slate-300 ring-2 ring-slate-400/20 shadow-sm opacity-85'
+                          : isActive
+                          ? 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                          : 'bg-slate-50/80 border-slate-200 opacity-60 grayscale-[30%] hover:opacity-85'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <Badge variant="default" className="text-[10px] px-2 py-0.5 mb-1.5 capitalize">
-                            {job.category}
-                          </Badge>
-                          <h3 className="font-bold text-slate-900 text-sm">{job.title}</h3>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <Badge variant="default" className="text-[10px] px-2 py-0.5 capitalize gap-1">
+                              <span>{CATEGORY_ICONS[job.category] || '📌'}</span>
+                              {job.category}
+                            </Badge>
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isActive
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-slate-200/70 text-slate-600 border-slate-300'
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                                }`}
+                              ></span>
+                              {isActive ? 'Aktif' : 'Nonaktif'}
+                            </span>
+                          </div>
+                          <h3
+                            className={`font-bold text-sm ${
+                              isActive ? 'text-slate-900' : 'text-slate-600'
+                            }`}
+                          >
+                            {job.title}
+                          </h3>
                         </div>
-                        <ChevronRight className={`w-5 h-5 transition ${isSelected ? 'text-blue-600 translate-x-1' : 'text-slate-400'}`} />
+                        <ChevronRight
+                          className={`w-5 h-5 transition shrink-0 ${
+                            isSelected ? 'text-blue-600 translate-x-1' : 'text-slate-400'
+                          }`}
+                        />
                       </div>
 
-                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                        <span className="flex items-center gap-1 font-medium text-slate-700">
-                          <Users className="w-3.5 h-3.5 text-blue-600" />
-                          {job.applicantCount} Pelamar
-                        </span>
-                        <span>
-                          Rata-rata:{' '}
-                          <strong className="text-slate-800">
-                            {job.applicantCount > 0 ? `${job.averageScore} pt` : '-'}
-                          </strong>
-                        </span>
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-3 text-slate-500">
+                          <span className="flex items-center gap-1 font-medium text-slate-700">
+                            <Users className="w-3.5 h-3.5 text-blue-600" />
+                            {job.applicantCount} Pelamar
+                          </span>
+                          <span>
+                            Rata-rata:{' '}
+                            <strong className="text-slate-800">
+                              {job.applicantCount > 0 ? `${job.averageScore} pt` : '-'}
+                            </strong>
+                          </span>
+                        </div>
+
+                        {/* Action Buttons: Toggle Active & Delete */}
+                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={(e) => toggleJobStatus(job, e)}
+                            disabled={togglingJobId === job.id}
+                            title={isActive ? 'Klik untuk menonaktifkan lowongan' : 'Klik untuk mengaktifkan lowongan'}
+                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border transition shadow-2xs ${
+                              isActive
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {togglingJobId === job.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : isActive ? (
+                              <ToggleRight className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <ToggleLeft className="w-4 h-4 text-slate-400" />
+                            )}
+                            <span className="hidden sm:inline">{isActive ? 'Aktif' : 'Nonaktif'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setJobToDelete(job)
+                            }}
+                            title="Hapus lowongan & pelamar terkait"
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-200 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )
@@ -427,12 +651,27 @@ export default function PerekrutDashboard() {
             {selectedJob ? (
               <Card className="bg-white">
                 <CardHeader className="border-b border-slate-100 pb-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="default" className="capitalize text-xs">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <Badge variant="default" className="capitalize text-xs gap-1">
+                          <span>{CATEGORY_ICONS[selectedJob.category] || '📌'}</span>
                           {selectedJob.category}
                         </Badge>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            selectedJob.is_active !== false
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              selectedJob.is_active !== false ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                            }`}
+                          ></span>
+                          {selectedJob.is_active !== false ? 'Aktif Menerima Lamaran' : 'Lowongan Nonaktif'}
+                        </span>
                         <span className="text-xs text-slate-400 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {new Date(selectedJob.created_at).toLocaleDateString('id-ID', {
@@ -442,10 +681,43 @@ export default function PerekrutDashboard() {
                           })}
                         </span>
                       </div>
-                      <CardTitle className="text-xl font-bold">{selectedJob.title}</CardTitle>
+                      <CardTitle className="text-xl font-bold text-slate-900">{selectedJob.title}</CardTitle>
                       {selectedJob.description && (
-                        <p className="text-xs text-slate-600 mt-1">{selectedJob.description}</p>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">{selectedJob.description}</p>
                       )}
+                    </div>
+
+                    {/* Action buttons in detail pane */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => toggleJobStatus(selectedJob, e)}
+                        disabled={togglingJobId === selectedJob.id}
+                        title={selectedJob.is_active !== false ? 'Nonaktifkan lowongan ini' : 'Aktifkan lowongan ini'}
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition shadow-xs ${
+                          selectedJob.is_active !== false
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {togglingJobId === selectedJob.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : selectedJob.is_active !== false ? (
+                          <ToggleRight className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <ToggleLeft className="w-4 h-4 text-slate-400" />
+                        )}
+                        <span>{selectedJob.is_active !== false ? 'Aktif' : 'Nonaktif'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setJobToDelete(selectedJob)}
+                        title="Hapus Lowongan Ini"
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl border border-slate-200 hover:border-red-200 transition shadow-xs"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </CardHeader>
@@ -462,7 +734,7 @@ export default function PerekrutDashboard() {
                   </div>
 
                   {loadingApplicants ? (
-                    <div className="p-12 text-center">
+                     <div className="p-12 text-center animate-fade-in">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
                       <span className="text-xs text-slate-500">Memuat peringkat kandidat...</span>
                     </div>
@@ -481,11 +753,8 @@ export default function PerekrutDashboard() {
                           <tr>
                             <th className="px-4 py-3">Rank</th>
                             <th className="px-4 py-3">Nama Pelamar</th>
-                            <th className="px-4 py-3">Skor Tes</th>
+                            <th className="px-4 py-3 text-center">Skor Tes</th>
                             <th className="px-4 py-3">Status Lamaran</th>
-                            <th className="px-4 py-3">Pendidikan</th>
-                            <th className="px-4 py-3">Domisili</th>
-                            <th className="px-4 py-3">No. HP</th>
                             <th className="px-4 py-3">Waktu Submit</th>
                             <th className="px-4 py-3 text-right">Aksi</th>
                           </tr>
@@ -512,9 +781,9 @@ export default function PerekrutDashboard() {
                                     {pelamar.full_name || 'Pelamar Kerja'}
                                   </div>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3 text-center">
                                   <span
-                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                    className={`inline-flex items-center justify-center min-w-[38px] px-2.5 py-1 rounded-full text-xs font-bold ${
                                       app.score >= 80
                                         ? 'bg-emerald-100 text-emerald-800'
                                         : app.score >= 60
@@ -522,7 +791,7 @@ export default function PerekrutDashboard() {
                                         : 'bg-amber-100 text-amber-800'
                                     }`}
                                   >
-                                    {app.score} / 100
+                                    {app.score}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3">
@@ -544,21 +813,6 @@ export default function PerekrutDashboard() {
                                     <option value="Dihubungi">Dihubungi</option>
                                     <option value="Ditolak">Ditolak</option>
                                   </select>
-                                </td>
-                                <td className="px-4 py-3 text-xs font-medium text-slate-700">
-                                  {pelamar.pendidikan ? (
-                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
-                                      {pelamar.pendidikan}
-                                    </span>
-                                  ) : (
-                                    '-'
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-xs text-slate-600">
-                                  {pelamar.domisili || '-'}
-                                </td>
-                                <td className="px-4 py-3 text-xs text-slate-600 font-mono">
-                                  {pelamar.phone || '-'}
                                 </td>
                                 <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
                                   {new Date(app.submitted_at).toLocaleDateString('id-ID', {
@@ -593,7 +847,7 @@ export default function PerekrutDashboard() {
                       <div className="flex items-center gap-2 mb-3">
                         <Sparkles className="w-4 h-4 text-blue-600" />
                         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                          5 Soal Praktis yang Disusun AI SumoPod
+                          Soal
                         </h4>
                       </div>
 
@@ -794,7 +1048,7 @@ export default function PerekrutDashboard() {
                 <div>
                   <span className="text-[10px] text-slate-400 block uppercase font-semibold">Skor Tes Kuis</span>
                   <span className="font-bold text-slate-900 text-sm">
-                    {activeApplicant.score} / 100
+                    {activeApplicant.score}
                   </span>
                 </div>
               </div>
@@ -905,6 +1159,61 @@ export default function PerekrutDashboard() {
                 onClick={() => setActiveApplicant(null)}
               >
                 Tutup
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Lowongan */}
+      {jobToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-100 text-red-600 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-900">Hapus Lowongan Kerja?</h3>
+            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+              Apakah Anda yakin ingin menghapus lowongan{' '}
+              <strong className="text-slate-900 font-semibold">"{jobToDelete.title}"</strong>?
+            </p>
+
+            <div className="mt-3 p-3 bg-red-50/80 rounded-xl border border-red-100 text-xs text-red-700 leading-normal">
+              ⚠️ <strong>Perhatian:</strong> Menghapus lowongan ini akan menghapus seluruh data lamaran ({jobToDelete.applicantCount} pelamar) dan soal kuis yang terkait secara permanen.
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={deletingJob}
+                onClick={() => setJobToDelete(null)}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={deletingJob}
+                onClick={handleDeleteJob}
+                className="bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm"
+              >
+                {deletingJob ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Menghapus...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Hapus Permanen
+                  </>
+                )}
               </Button>
             </div>
           </div>

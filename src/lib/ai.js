@@ -48,3 +48,59 @@ Return ONLY a JSON array, no explanation:
   const clean = text.replace(/```json|```/g, '').trim();
   return JSON.parse(clean);
 }
+
+export async function formatJobDescription(rawDescription, jobTitle, category) {
+  if (!rawDescription || !rawDescription.trim()) {
+    return '';
+  }
+
+  const prompt = `
+Kamu adalah asisten HR UMKM Indonesia. Rapikan deskripsi lowongan kerja mentah berikut untuk posisi ${jobTitle} (kategori: ${category}).
+
+Aturan WAJIB:
+- Format menjadi string terstruktur dan ringkas dengan bagian:
+  📍 Lokasi: ...
+  💰 Gaji: ...
+  🎯 Kualifikasi: ...
+  📝 Deskripsi Singkat: ...
+- Jika suatu bagian tidak disebutkan dalam teks mentah, lewati/jangan tulis bagian tersebut sama sekali
+- Gunakan teks polos dengan emoji icon per baris sesuai di atas, JANGAN gunakan format markdown seperti bold (**), bullet points (-), heading (#), dsb
+- Maksimal 5 baris total
+- Bahasa Indonesia yang rapi dan profesional
+
+Deskripsi mentah:
+"${rawDescription}"
+
+Return ONLY the plain formatted text, no introduction or explanation:
+`;
+
+  const endpoint = '/api-sumopod/v1/chat/completions';
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUMOPOD_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300,
+        temperature: 0.5
+      })
+    });
+
+    if (!response.ok) {
+      console.warn('formatJobDescription API failed, fallback to raw description');
+      return rawDescription;
+    }
+
+    const data = await response.json();
+    const formatted = data?.choices?.[0]?.message?.content?.trim();
+    return formatted || rawDescription;
+  } catch (err) {
+    console.warn('formatJobDescription error, fallback to raw description:', err);
+    return rawDescription;
+  }
+}

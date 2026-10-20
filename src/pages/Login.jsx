@@ -1,16 +1,25 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LogIn, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
 
 export default function Login() {
+  const { user, profile, loading: authLoading, login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const { login } = useAuth()
   const navigate = useNavigate()
+
+  // Jika sudah login, langsung alihkan ke dashboard masing-masing
+  if (!authLoading && user) {
+    const role = profile?.role || user.user_metadata?.role
+    if (role === 'perekrut') {
+      return <Navigate to="/dashboard/perekrut" replace />
+    }
+    return <Navigate to="/dashboard/pelamar" replace />
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -35,14 +44,15 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8 animate-scale-in">
         {/* Brand / Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 text-2xl font-extrabold text-blue-600">
-            <span className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-              <Sparkles className="w-5 h-5" />
-            </span>
-            SkillMatch
+          <Link to="/" className="inline-flex items-center justify-center hover:opacity-90 transition">
+            <img
+              src="/Logo_SkillMatch.png"
+              alt="SkillMatch Logo"
+              className="h-12 w-auto object-contain"
+            />
           </Link>
           <h2 className="text-xl font-bold text-slate-900 mt-4">Selamat Datang Kembali</h2>
           <p className="text-sm text-slate-500 mt-1">Masuk untuk mengakses dashboard Anda</p>
@@ -87,7 +97,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl transition shadow-md shadow-blue-500/20 disabled:opacity-50 mt-2"
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl transition shadow-md shadow-blue-500/20 disabled:opacity-50 mt-2 btn-press"
           >
             {loading ? (
               <>
