@@ -338,7 +338,7 @@ export default function PerekrutDashboard() {
     if (!selectedJob) return
     setShowRegenerateConfirm(false)
     setRegeneratingQuestions(true)
-    toast('Sedang merancang 5 soal tes baru dengan AI...', 'info', 3000)
+    toast('Loading...', 'info', 3000)
 
     try {
       // 1. Call generateQuiz(category, jobTitle) for that job

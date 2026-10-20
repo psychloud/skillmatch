@@ -108,11 +108,10 @@ export function AuthProvider({ children }) {
           full_name: fullName,
           role,
           company_name: role === 'perekrut' ? companyName : null,
-          logo_url: role === 'perekrut' ? logoUrl : null,
           phone: role === 'pelamar' ? phone : null,
           domisili: role === 'pelamar' ? domisili : null,
           pendidikan: role === 'pelamar' ? pendidikan : null,
-          ringkasan: role === 'pelamar' ? ringkasan : null,
+          // JANGAN masukkan logo_url atau ringkasan ke data auth agar token JWT tidak bengkak
         },
       },
     })
@@ -158,7 +157,7 @@ export function AuthProvider({ children }) {
   const updateProfile = async (updates) => {
     if (!user) throw new Error('User belum login')
 
-    // 1. Update profiles table
+    // 1. Simpan semua data lengkap (termasuk logo_url dan ringkasan) ke tabel DB profiles
     const { error: profileError } = await supabase
       .from('profiles')
       .update(updates)
@@ -166,10 +165,14 @@ export function AuthProvider({ children }) {
 
     if (profileError) throw profileError
 
-    // 2. Sync to auth user_metadata so fallback metadata is always aligned
+    // 2. Sync HANYA metadata teks ringan ke auth.users (hapus logo_url & ringkasan agar JWT tetap kecil <1KB)
     try {
+      const { logo_url, ringkasan, ...lightweightData } = updates
       await supabase.auth.updateUser({
-        data: updates,
+        data: {
+          ...lightweightData,
+          logo_url: null, // Hapus logo_url dari auth metadata agar tidak masuk ke header JWT
+        },
       })
     } catch (e) {
       console.warn('Could not sync user_metadata:', e)

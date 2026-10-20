@@ -66,13 +66,42 @@ export function EditProfileModal({ isOpen, onClose }) {
   const handleLogoChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      setErrorMsg('Ukuran file logo maksimal 2MB')
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMsg('Ukuran file logo maksimal 5MB')
       return
     }
+
     const reader = new FileReader()
-    reader.onloadend = () => {
-      setLogoUrl(reader.result)
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        // Kompresi logo ke resolusi 160x160px agar file sangat ringan (<10KB)
+        const canvas = document.createElement('canvas')
+        const MAX_DIM = 160
+        let width = img.width
+        let height = img.height
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width)
+            width = MAX_DIM
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height)
+            height = MAX_DIM
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, width, height)
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8)
+        setLogoUrl(compressedDataUrl)
+      }
+      img.src = event.target.result
     }
     reader.readAsDataURL(file)
   }
