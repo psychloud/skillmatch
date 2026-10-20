@@ -195,12 +195,8 @@ export default function PelamarDashboard() {
         {/* Welcome Header */}
         <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in-up">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold mb-2">
-              <User className="w-3.5 h-3.5" />
-              Talenta Muda & Pencari Kerja
-            </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Halo, {profile?.full_name || 'Pelamar'} 👋
+              Halo, {profile?.full_name || user?.user_metadata?.full_name || 'Pelamar'}
             </h1>
             <p className="text-sm text-slate-500 mt-1">
               Buktikan kompetensi Anda tanpa bias CV. Ikuti tes studi kasus dan raih kesempatan kerja.
@@ -287,7 +283,7 @@ export default function PelamarDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-slate-900">
-                {totalApplied > 0 ? `${avgScore} / 100` : '-'}
+                {totalApplied > 0 ? avgScore : '-'}
               </div>
               <p className="text-xs text-slate-500 mt-1">Verifikasi kemampuan riil</p>
             </CardContent>
@@ -384,7 +380,7 @@ export default function PelamarDashboard() {
                             <img
                               src={job.perekrut.logo_url}
                               alt={job.perekrut.company_name}
-                              className="w-5 h-5 rounded-md object-contain border border-slate-200 shrink-0"
+                              className="w-5 h-5 rounded-md object-cover border border-slate-200 shrink-0"
                             />
                           ) : (
                             <Building2 className="w-4 h-4 text-slate-400 shrink-0" />

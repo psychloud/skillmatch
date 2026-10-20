@@ -170,9 +170,9 @@ export function EditProfileModal({ isOpen, onClose }) {
                   Logo Usaha / Perusahaan
                 </label>
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative group">
+                  <div className="w-16 h-16 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative group">
                     {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-cover rounded-xl" />
                     ) : (
                       <Building2 className="w-8 h-8 text-slate-300" />
                     )}

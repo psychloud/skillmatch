@@ -496,26 +496,29 @@ export default function PerekrutDashboard() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
-        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in-up">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold mb-2">
-              {profile?.logo_url ? (
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in-up">
+          <div className="flex items-center gap-4">
+            {/* Logo Usaha / UMKM */}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+              {(profile?.logo_url || user?.user_metadata?.logo_url) ? (
                 <img
-                  src={profile.logo_url}
-                  alt={profile.company_name}
-                  className="w-4 h-4 rounded-full object-cover shrink-0"
+                  src={profile?.logo_url || user?.user_metadata?.logo_url}
+                  alt={profile?.company_name || user?.user_metadata?.company_name || 'Logo UMKM'}
+                  className="w-full h-full object-cover rounded-2xl"
                 />
               ) : (
-                <Building2 className="w-3.5 h-3.5" />
+                <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400" />
               )}
-              {profile?.company_name || 'Dashboard Perekrut UMKM'}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Panel Rekrutmen & Verifikasi AI
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Buat lowongan dengan prompt singkat. Sistem otomatis menyusun 5 tes studi kasus untuk menyaring kandidat terbaik.
-            </p>
+
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                {profile?.company_name || user?.user_metadata?.company_name || 'Usaha / UMKM Anda'}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-xl leading-relaxed">
+                Buat lowongan dengan prompt singkat. Sistem otomatis menyusun 5 tes studi kasus untuk menyaring kandidat terbaik.
+              </p>
+            </div>
           </div>
 
           <Button
@@ -916,7 +919,7 @@ export default function PerekrutDashboard() {
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-blue-600" />
                         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                          5 Soal Studi Kasus AI
+                          5 Soal Studi Kasus
                         </h4>
                       </div>
 
