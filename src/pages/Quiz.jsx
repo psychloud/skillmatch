@@ -587,9 +587,8 @@ export default function Quiz() {
               <span className="font-semibold text-blue-600 uppercase tracking-wider">
                 Studi Kasus Praktis #{currentIndex + 1}
               </span>
-              <span className="flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                AI Generated
+              <span className="text-[11px] font-medium text-slate-400">
+                Pilihan Ganda
               </span>
             </div>
             <CardTitle className="text-base sm:text-lg text-slate-900 leading-relaxed font-semibold">

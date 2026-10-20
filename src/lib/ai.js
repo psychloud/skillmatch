@@ -34,14 +34,14 @@ Return ONLY a JSON array, no explanation:
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('SumoPod API error response:', response.status, errorText);
-    throw new Error(`Gagal memanggil AI SumoPod (${response.status}): ${errorText || response.statusText}`);
+    console.error('API error response:', response.status, errorText);
+    throw new Error(`Gagal memproses soal otomatis (${response.status}): ${errorText || response.statusText}`);
   }
 
   const data = await response.json();
   const text = data?.choices?.[0]?.message?.content;
   if (!text) {
-    throw new Error('Format respons dari SumoPod tidak sesuai atau kosong.');
+    throw new Error('Format respons soal tidak sesuai atau kosong.');
   }
   
   // Strip markdown fences jika ada

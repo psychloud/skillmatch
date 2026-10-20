@@ -400,7 +400,7 @@ export default function PelamarDashboard() {
 
                       <CardContent className="pt-0 flex-1 flex flex-col justify-between">
                         <p className="text-xs text-slate-600 line-clamp-2 mb-4 leading-relaxed">
-                          {job.description || 'Perekrut mencari kandidat yang siap diuji dengan 5 soal studi kasus praktis AI.'}
+                          {job.description || 'Perekrut mencari kandidat yang siap diuji dengan 5 soal studi kasus praktis.'}
                         </p>
 
                         <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -594,7 +594,7 @@ export default function PelamarDashboard() {
             <div className="bg-blue-50/70 border border-blue-200/60 rounded-xl p-4 mb-6 text-xs text-blue-900 space-y-1">
               <div className="font-bold flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-blue-600" />
-                Format Seleksi AI:
+                Format Tes Seleksi:
               </div>
               <p>
                 Anda akan mengerjakan 5 soal studi kasus pilihan ganda. Skor Anda langsung tercatat dan menjadi dasar seleksi perekrut.

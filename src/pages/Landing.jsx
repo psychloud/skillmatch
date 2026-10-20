@@ -122,7 +122,7 @@ export default function Landing() {
               </h1>
 
               <p className="mt-4 text-sm sm:text-base text-slate-700 max-w-lg leading-relaxed font-normal">
-                Platform rekrutmen untuk UMKM Indonesia. Posting lowongan, AI buatkan soal seleksinya, kandidat tersaring otomatis berdasarkan skor.
+                Platform rekrutmen untuk UMKM Indonesia. Posting lowongan, soal seleksi otomatis disiapkan, dan kandidat tersaring berdasarkan skor terukur.
               </p>
 
               {/* CTA Buttons */}
@@ -271,7 +271,7 @@ export default function Landing() {
               <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-base font-semibold text-slate-800">Belum Ada Lowongan Aktif</h3>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Pemilik usaha UMKM dapat mulai memposting lowongan sekarang dan sistem AI akan membuatkan soal tesnya.
+                Pemilik usaha UMKM dapat mulai memposting lowongan sekarang dan sistem akan otomatis menyiapkan soal tesnya.
               </p>
               <div className="mt-5">
                 <Link to="/register?role=perekrut">
@@ -330,16 +330,13 @@ export default function Landing() {
                         {job.description || 'Tidak ada deskripsi khusus untuk lowongan ini.'}
                       </p>
 
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                      <div className="pt-3 border-t border-slate-100 flex items-center text-xs text-slate-400">
                         <span className="flex items-center gap-1 text-[11px]">
                           <Calendar className="w-3 h-3" />
                           {new Date(job.created_at).toLocaleDateString('id-ID', {
                             day: 'numeric',
                             month: 'short',
                           })}
-                        </span>
-                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                          Quiz AI Siap
                         </span>
                       </div>
 

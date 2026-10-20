@@ -344,7 +344,7 @@ export default function PerekrutDashboard() {
       // 1. Call generateQuiz(category, jobTitle) for that job
       const newQuestions = await generateQuiz(selectedJob.category, selectedJob.title)
       if (!newQuestions || newQuestions.length === 0) {
-        throw new Error('Gagal menghasilkan soal dari AI')
+        throw new Error('Gagal menghasilkan soal tes')
       }
 
       // 2. Delete existing questions for that job_id from questions table
@@ -392,7 +392,7 @@ export default function PerekrutDashboard() {
       toast('5 soal baru berhasil dibuat', 'success')
     } catch (err) {
       console.error('Error regenerating questions:', err)
-      toast(`Gagal membuat soal baru: ${err.message || 'Error AI'}`, 'error')
+      toast(`Gagal membuat soal baru: ${err.message || 'Terjadi kesalahan sistem'}`, 'error')
     } finally {
       setRegeneratingQuestions(false)
     }
@@ -407,7 +407,7 @@ export default function PerekrutDashboard() {
     }
 
     setCreating(true)
-    toast('Sedang merancang soal tes & merapikan deskripsi dengan AI...', 'info', 3000)
+    toast('Sedang merancang soal tes & merapikan deskripsi...', 'info', 3000)
 
     try {
       // 1. Call generateQuiz dan formatJobDescription secara paralel via Promise.all
@@ -417,7 +417,7 @@ export default function PerekrutDashboard() {
       ])
 
       if (!questions || questions.length === 0) {
-        throw new Error('Gagal menghasilkan soal dari AI')
+        throw new Error('Gagal menghasilkan soal tes')
       }
 
       // 2. Pastikan profil perekrut ada di tabel profiles (mencegah foreign key constraint error)
@@ -982,7 +982,7 @@ export default function PerekrutDashboard() {
                 <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-2" />
                 <h3 className="text-base font-semibold text-slate-800">Pilih Lowongan</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Pilih lowongan di sebelah kiri untuk melihat peringkat pelamar dan bank soal AI.
+                  Pilih lowongan di sebelah kiri untuk melihat peringkat pelamar dan bank soal tes.
                 </p>
               </Card>
             )}
@@ -1029,7 +1029,7 @@ export default function PerekrutDashboard() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Kategori Posisi (Target Soal AI)
+                  Kategori Posisi (Target Soal Tes)
                 </label>
                 <select
                   value={category}
@@ -1333,7 +1333,7 @@ export default function PerekrutDashboard() {
             </p>
 
             <div className="mt-3 p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-xs text-blue-800 leading-normal">
-              💡 AI akan merancang 5 soal studi kasus baru pilihan ganda berdasarkan posisi <strong className="font-semibold text-blue-950">"{selectedJob?.title}"</strong>.
+              💡 Sistem akan merancang 5 soal studi kasus baru pilihan ganda berdasarkan posisi <strong className="font-semibold text-blue-950">"{selectedJob?.title}"</strong>.
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-2.5">
