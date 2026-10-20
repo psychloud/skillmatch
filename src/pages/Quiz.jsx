@@ -128,8 +128,8 @@ function AnimatedScoreRing({ score, isPassed }) {
   const ringColor = score >= 80
     ? '#059669'
     : score >= 60
-    ? '#2563eb'
-    : '#d97706'
+      ? '#2563eb'
+      : '#d97706'
 
   // Count-up animation
   useEffect(() => {
@@ -474,9 +474,8 @@ export default function Quiz() {
 
             <div className="relative z-20">
               <div
-                className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
-                  isPassed ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-                }`}
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${isPassed ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                  }`}
               >
                 <Trophy className="w-9 h-9" />
               </div>
@@ -485,7 +484,7 @@ export default function Quiz() {
                 {showConfetti ? '🎉 Luar Biasa!' : isPassed ? 'Tes Selesai!' : 'Tes Telah Selesai'}
               </h2>
               <p className="text-xs text-slate-500 mb-6">
-                Hasil verifikasi kompetensi Anda telah langsung dikirim ke radar perekrut{' '}
+                Hasil verifikasi kompetensi Anda telah langsung dikirim ke perekrut{' '}
                 <strong>{job?.perekrut?.company_name || 'UMKM'}</strong>.
               </p>
 
@@ -499,8 +498,8 @@ export default function Quiz() {
                   {finalScore >= 80
                     ? '⭐ Kemampuan Sangat Baik (Top Tier)'
                     : isPassed
-                    ? '✅ Lolos Kualifikasi Dasar'
-                    : '📚 Perlu Asah Skill Tambahan'}
+                      ? '✅ Lolos Kualifikasi Dasar'
+                      : '📚 Perlu Asah Skill Tambahan'}
                 </Badge>
               </div>
 
@@ -569,13 +568,12 @@ export default function Quiz() {
               <button
                 key={idx}
                 onClick={() => setCurrentIndex(idx)}
-                className={`h-2.5 rounded-full transition-all duration-300 ${
-                  isCurrent
+                className={`h-2.5 rounded-full transition-all duration-300 ${isCurrent
                     ? 'bg-blue-600 ring-2 ring-blue-300 scale-110'
                     : isAnswered
-                    ? 'bg-emerald-500'
-                    : 'bg-slate-200 hover:bg-slate-300'
-                }`}
+                      ? 'bg-emerald-500'
+                      : 'bg-slate-200 hover:bg-slate-300'
+                  }`}
                 title={`Pindah ke soal ${idx + 1}`}
               />
             )
@@ -606,18 +604,16 @@ export default function Quiz() {
                 <div
                   key={opt.key}
                   onClick={() => selectOption(opt.key)}
-                  className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-3.5 card-hover ${
-                    isSelected
+                  className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-3.5 card-hover ${isSelected
                       ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-sm scale-[1.01]'
                       : 'bg-white border-slate-200 hover:bg-slate-50/70 hover:border-slate-300'
-                  }`}
+                    }`}
                 >
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0 transition-all duration-200 ${
-                      isSelected
+                    className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0 transition-all duration-200 ${isSelected
                         ? 'bg-blue-600 text-white scale-110'
                         : 'bg-slate-100 text-slate-600 border border-slate-300'
-                    }`}
+                      }`}
                   >
                     {isSelected ? <Check className="w-3.5 h-3.5" /> : opt.key}
                   </div>
