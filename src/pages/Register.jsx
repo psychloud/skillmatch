@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useSearchParams, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { uploadLogoToStorage } from '../lib/storage'
 import { UserPlus, Sparkles, AlertCircle, Loader2, Building2, User, Mail, ShieldCheck } from 'lucide-react'
 
 // Password strength calculator
@@ -26,7 +27,8 @@ export default function Register() {
   const [role, setRole] = useState(initialRole)
   const [fullName, setFullName] = useState('')
   const [companyName, setCompanyName] = useState('')
-  const [companyLogo, setCompanyLogo] = useState('')
+  const [companyLogo, setCompanyLogo] = useState('') // untuk preview gambar di UI
+  const [logoFile, setLogoFile] = useState(null)      // file gambar asli untuk diunggah ke Storage
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   
@@ -55,15 +57,12 @@ export default function Register() {
   const handleLogoChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      setErrorMsg('Ukuran file logo maksimal 2MB')
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMsg('Ukuran file logo maksimal 5MB')
       return
     }
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setCompanyLogo(reader.result)
-    }
-    reader.readAsDataURL(file)
+    setLogoFile(file)
+    setCompanyLogo(URL.createObjectURL(file))
   }
 
   const handleSubmit = async (e) => {
@@ -73,13 +72,22 @@ export default function Register() {
     setLoading(true)
 
     try {
+      // 1. Upload file logo ke Supabase Storage bucket 'logos' jika ada
+      let publicLogoUrl = null
+      if (role === 'perekrut' && logoFile) {
+        publicLogoUrl = await uploadLogoToStorage(logoFile)
+      }
+
+      // 2. Daftarkan akun auth.
+      // PENTING: logo_url SAMA SEKALI TIDAK disertakan dalam metadata auth.signUp.
+      // Hanya string public URL yang disimpan ke kolom logo_url tabel profiles!
       const res = await register({
         email,
         password,
         role,
         fullName,
         companyName,
-        logoUrl: role === 'perekrut' ? companyLogo : null,
+        logoUrl: publicLogoUrl,
         phone: role === 'pelamar' ? phone : null,
         domisili: role === 'pelamar' ? domisili : null,
         pendidikan: role === 'pelamar' ? pendidikan : null,

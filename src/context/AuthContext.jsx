@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadLogoToStorage } from '../lib/storage'
 
 const AuthContext = createContext(null)
 
@@ -95,11 +96,14 @@ export function AuthProvider({ children }) {
     fullName,
     companyName,
     logoUrl,
+    logoFile,
     phone,
     domisili,
     pendidikan,
     ringkasan,
   }) => {
+    // PENTING: logo_url sama sekali TIDAK disertakan dalam auth.signUp metadata (options.data)
+    // agar token JWT tetap kecil (<1KB) dan tidak menyebabkan 494/431 REQUEST_HEADER_TOO_LARGE.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -111,20 +115,29 @@ export function AuthProvider({ children }) {
           phone: role === 'pelamar' ? phone : null,
           domisili: role === 'pelamar' ? domisili : null,
           pendidikan: role === 'pelamar' ? pendidikan : null,
-          // JANGAN masukkan logo_url atau ringkasan ke data auth agar token JWT tidak bengkak
         },
       },
     })
     if (error) throw error
 
-    // Insert to profiles table if user is created
+    // Jika ada file logo yang belum diunggah, unggah ke Supabase Storage bucket 'logos'
+    let finalLogoUrl = logoUrl || null
+    if (role === 'perekrut' && logoFile && !finalLogoUrl) {
+      try {
+        finalLogoUrl = await uploadLogoToStorage(logoFile, data.user?.id)
+      } catch (uploadErr) {
+        console.warn('Gagal mengunggah logo ke storage secara otomatis:', uploadErr.message)
+      }
+    }
+
+    // Simpan logo_url (hanya string URL) dan data lengkap HANYA ke tabel profiles database
     if (data.user) {
       const fullProfileData = {
         id: data.user.id,
         role,
         full_name: fullName,
         company_name: role === 'perekrut' ? companyName : null,
-        logo_url: role === 'perekrut' ? logoUrl : null,
+        logo_url: role === 'perekrut' ? finalLogoUrl : null,
         phone: role === 'pelamar' ? phone : null,
         domisili: role === 'pelamar' ? domisili : null,
         pendidikan: role === 'pelamar' ? pendidikan : null,
@@ -157,7 +170,7 @@ export function AuthProvider({ children }) {
   const updateProfile = async (updates) => {
     if (!user) throw new Error('User belum login')
 
-    // 1. Simpan semua data lengkap (termasuk logo_url dan ringkasan) ke tabel DB profiles
+    // 1. Simpan semua data lengkap (termasuk logo_url) ke tabel DB profiles
     const { error: profileError } = await supabase
       .from('profiles')
       .update(updates)
@@ -165,14 +178,11 @@ export function AuthProvider({ children }) {
 
     if (profileError) throw profileError
 
-    // 2. Sync HANYA metadata teks ringan ke auth.users (hapus logo_url & ringkasan agar JWT tetap kecil <1KB)
+    // 2. Sync HANYA metadata teks ringan ke auth.users (TIDAK PERNAH menyertakan logo_url ke auth user_metadata)
     try {
       const { logo_url, ringkasan, ...lightweightData } = updates
       await supabase.auth.updateUser({
-        data: {
-          ...lightweightData,
-          logo_url: null, // Hapus logo_url dari auth metadata agar tidak masuk ke header JWT
-        },
+        data: lightweightData,
       })
     } catch (e) {
       console.warn('Could not sync user_metadata:', e)

@@ -426,6 +426,7 @@ export default function PerekrutDashboard() {
         role: profile?.role || user.user_metadata?.role || 'perekrut',
         full_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0],
         company_name: profile?.company_name || user.user_metadata?.company_name || 'Perusahaan UMKM',
+        ...(profile?.logo_url ? { logo_url: profile.logo_url } : {}),
       })
       if (profileCheckError) {
         console.warn('Upsert profile notice:', profileCheckError)
@@ -500,9 +501,9 @@ export default function PerekrutDashboard() {
           <div className="flex items-center gap-4">
             {/* Logo Usaha / UMKM */}
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-              {(profile?.logo_url || user?.user_metadata?.logo_url) ? (
+              {profile?.logo_url ? (
                 <img
-                  src={profile?.logo_url || user?.user_metadata?.logo_url}
+                  src={profile.logo_url}
                   alt={profile?.company_name || user?.user_metadata?.company_name || 'Logo UMKM'}
                   className="w-full h-full object-cover rounded-2xl"
                 />
@@ -1008,7 +1009,7 @@ export default function PerekrutDashboard() {
               <h2 className="text-xl font-bold text-slate-900">Buka Lowongan Baru</h2>
             </div>
             <p className="text-xs text-slate-500 mb-6">
-              AI SumoPod akan secara otomatis membuat 5 soal studi kasus nyata pilihan ganda berdasarkan posisi ini.
+             Sistem akan secara otomatis membuat 5 soal studi kasus nyata pilihan ganda berdasarkan posisi ini.
             </p>
 
             <form onSubmit={handleCreateJob} className="space-y-4">

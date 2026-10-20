@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import { uploadLogoToStorage } from '../lib/storage'
 import { Button } from './ui/button'
 import {
   X,
@@ -26,6 +27,7 @@ export function EditProfileModal({ isOpen, onClose }) {
   const [fullName, setFullName] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
+  const [logoFile, setLogoFile] = useState(null)
 
   // Pelamar fields
   const [phone, setPhone] = useState('')
@@ -40,6 +42,7 @@ export function EditProfileModal({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       setErrorMsg('')
+      setLogoFile(null)
       if (profile) {
         setFullName(profile.full_name || '')
         setCompanyName(profile.company_name || '')
@@ -52,7 +55,6 @@ export function EditProfileModal({ isOpen, onClose }) {
         const meta = user.user_metadata
         setFullName(meta.full_name || '')
         setCompanyName(meta.company_name || '')
-        setLogoUrl(meta.logo_url || '')
         setPhone(meta.phone || '')
         setDomisili(meta.domisili || '')
         setPendidikan(meta.pendidikan || 'SMA/SMK')
@@ -70,40 +72,8 @@ export function EditProfileModal({ isOpen, onClose }) {
       setErrorMsg('Ukuran file logo maksimal 5MB')
       return
     }
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const img = new Image()
-      img.onload = () => {
-        // Kompresi logo ke resolusi 160x160px agar file sangat ringan (<10KB)
-        const canvas = document.createElement('canvas')
-        const MAX_DIM = 160
-        let width = img.width
-        let height = img.height
-
-        if (width > height) {
-          if (width > MAX_DIM) {
-            height = Math.round((height * MAX_DIM) / width)
-            width = MAX_DIM
-          }
-        } else {
-          if (height > MAX_DIM) {
-            width = Math.round((width * MAX_DIM) / height)
-            height = MAX_DIM
-          }
-        }
-
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0, width, height)
-
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8)
-        setLogoUrl(compressedDataUrl)
-      }
-      img.src = event.target.result
-    }
-    reader.readAsDataURL(file)
+    setLogoFile(file)
+    setLogoUrl(URL.createObjectURL(file))
   }
 
   const handleSave = async (e) => {
@@ -124,10 +94,14 @@ export function EditProfileModal({ isOpen, onClose }) {
     try {
       let updates = {}
       if (role === 'perekrut') {
+        let finalLogoUrl = logoUrl
+        if (logoFile) {
+          finalLogoUrl = await uploadLogoToStorage(logoFile, user?.id)
+        }
         updates = {
           full_name: fullName.trim(),
           company_name: companyName.trim(),
-          logo_url: logoUrl || null,
+          logo_url: finalLogoUrl || null,
         }
       } else {
         updates = {
