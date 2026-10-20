@@ -508,17 +508,6 @@ export default function PelamarDashboard() {
                           <tr key={app.id} className="hover:bg-slate-50/70 transition">
                             <td className="px-6 py-4">
                               <div className="font-bold text-slate-900">{app.job?.title || 'Posisi Lowongan'}</div>
-                              {status === 'Dihubungi' && (
-                                <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
-                                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                                  <div>
-                                    <span className="font-bold text-emerald-950">Selamat! {companyName}</span> tertarik dengan kualifikasi tes Anda.
-                                    <p className="text-emerald-700 mt-0.5 font-medium">
-                                      Perekrut akan menghubungi kamu melalui nomor HP yang kamu daftarkan.
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
                             </td>
                             <td className="px-6 py-4 text-slate-700 text-xs font-medium">
                               {companyName}
