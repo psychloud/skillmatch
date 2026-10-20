@@ -1090,7 +1090,7 @@ export default function PerekrutDashboard() {
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Terbitkan & Buat Quiz AI</span>
+                      <span>Terbitkan & Buat Quiz</span>
                     </>
                   )}
                 </Button>

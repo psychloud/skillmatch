@@ -58,15 +58,6 @@ export default function Landing() {
   const [liveJobs, setLiveJobs] = useState([])
   const [loadingJobs, setLoadingJobs] = useState(true)
 
-  // Jika user sudah login, langsung alihkan ke dashboard masing-masing
-  if (!loading && user) {
-    const role = profile?.role || user.user_metadata?.role
-    if (role === 'perekrut') {
-      return <Navigate to="/dashboard/perekrut" replace />
-    }
-    return <Navigate to="/dashboard/pelamar" replace />
-  }
-
   useEffect(() => {
     async function fetchLiveJobs() {
       try {
@@ -100,6 +91,15 @@ export default function Landing() {
 
     fetchLiveJobs()
   }, [])
+
+  // Jika user sudah login, langsung alihkan ke dashboard masing-masing
+  if (!loading && user) {
+    const role = profile?.role || user.user_metadata?.role
+    if (role === 'perekrut') {
+      return <Navigate to="/dashboard/perekrut" replace />
+    }
+    return <Navigate to="/dashboard/pelamar" replace />
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
